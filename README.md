@@ -1,40 +1,42 @@
 # Quick Merge Jenkins
 
-一个“配置驱动”的 VSCode 合并助手：从项目根目录读取 `.quick-merge.json`，用按钮一键执行合并流程，并在合并成功后可选触发 Jenkins 构建。
+Config-driven VSCode merge helper. It reads `.quick-merge.json` from the project root, executes the merge flow via buttons, and can trigger Jenkins after a successful merge.
 
-## 功能
+[中文说明](README.zh-CN.md)
 
-- 一键合并：按配置执行 `checkout target` → `merge source` → 回到原分支
-- 冲突处理：列出冲突文件、打开合并编辑器、回到原分支
-- 结果展示：合并摘要（commit、变更文件、耗时）、推送与 Jenkins 触发结果
-- 多套合并配置：一个项目可配置多个合并按钮
-- Jenkins 触发：合并成功后可触发 Jenkins 构建（无需在 UI 配置）
+## Features
 
-## 使用方式
+- One-click merge: `checkout target` -> `merge source` -> checkout back
+- Conflict handling: list conflict files, open merge editor, return to original branch
+- Result details: merge summary (commit, changed files, duration), push + Jenkins status
+- Multiple profiles: define multiple merge buttons per project
+- Jenkins trigger: optional Jenkins build trigger (configured in file, not UI)
 
-1. 打开项目文件夹，侧边栏点击 **Quick Merge Jenkins** 图标
-2. 点击“打开配置文件”生成 `.quick-merge.json`
-3. 编辑配置后，点击“刷新配置”更新按钮列表
-4. 点击对应按钮执行合并
+## Usage
 
-> 注意：配置只在点击“刷新配置”时读取，保存配置后需手动刷新。
+1. Open the project folder, click the **Quick Merge Jenkins** icon in the sidebar
+2. Click "Open Config" to generate `.quick-merge.json`
+3. Edit the config, then click "Refresh Config" to load profiles
+4. Click a profile button to run the merge
 
-## 配置文件格式
+> Note: config is only loaded when you click "Refresh Config".
 
-项目根目录：`.quick-merge.json`
+## Config File
 
-示例：
+Project root: `.quick-merge.json`
+
+Example:
 
 ```json
 {
   "ui": {
-    "refreshLabel": "刷新配置",
-    "openConfigLabel": "打开配置文件"
+    "refreshLabel": "Refresh Config",
+    "openConfigLabel": "Open Config"
   },
   "profiles": [
     {
       "id": "merge-main",
-      "label": "合并到 main",
+      "label": "Merge to main",
       "sourceBranch": "",
       "targetBranch": "main",
       "strategy": "default",
@@ -56,7 +58,7 @@
     },
     {
       "id": "merge-release",
-      "label": "合并到 release",
+      "label": "Merge to release",
       "sourceBranch": "",
       "targetBranch": "release",
       "strategy": "no-ff",
@@ -66,31 +68,31 @@
 }
 ```
 
-### 字段说明
+### Field Reference
 
-- `ui.refreshLabel` / `ui.openConfigLabel`：按钮文案（可选）
-- `profiles`：合并配置列表（必须）
-  - `id`：配置唯一标识（按钮点击时使用）
-  - `label`：按钮文案
-  - `sourceBranch`：源分支，留空默认当前分支
-  - `targetBranch`：目标分支（必填）
-  - `strategy`：`default` / `no-ff` / `ff-only`
-  - `pushAfterMerge`：是否推送远端（默认 `true`）
-  - `pushRemote`：远端名（默认 `origin`，没有则取第一个远端）
-  - `jenkins`：Jenkins 触发配置（可选）
+- `ui.refreshLabel` / `ui.openConfigLabel`: button labels (optional)
+- `profiles`: list of merge profiles (required)
+  - `id`: profile key
+  - `label`: button label
+  - `sourceBranch`: source branch, defaults to current branch when empty
+  - `targetBranch`: target branch (required)
+  - `strategy`: `default` / `no-ff` / `ff-only`
+  - `pushAfterMerge`: push to remote (default `true`)
+  - `pushRemote`: remote name (default `origin`, or first remote)
+  - `jenkins`: Jenkins trigger config (optional)
 
-### Jenkins 配置
+### Jenkins Config
 
-- `url`：Jenkins 根地址（不要包含 `/job/...`）
-- `job`：Job 路径，使用 `folder/jobName` 形式
-- 认证方式（两选一）
-  - `user` + `apiToken`（推荐）
-  - `token`（Job 里开启 “Trigger builds remotely”）
-- `crumb`：Jenkins 开启 CSRF 时设为 `true`
-- `parameters`：触发参数，支持变量：
+- `url`: Jenkins base URL (no `/job/...`)
+- `job`: job path in `folder/jobName` form
+- Auth (choose one):
+  - `user` + `apiToken` (recommended)
+  - `token` (enable "Trigger builds remotely" in job config)
+- `crumb`: set `true` when CSRF is enabled
+- `parameters`: supports variables:
   - `${sourceBranch}` `${targetBranch}` `${currentBranch}` `${mergeCommit}` `${strategy}` `${pushRemote}`
 
-## 故障排查
+## Troubleshooting
 
-- Jenkins Crumb 403：请确认 `user` + `apiToken` 正确，或将 `crumb` 设为 `false`
-- 推送失败：检查 `pushRemote` 是否存在，以及仓库权限
+- Jenkins Crumb 403: verify `user` + `apiToken`, or set `crumb` to `false`
+- Push failed: check `pushRemote` and repo permissions
