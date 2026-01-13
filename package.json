@@ -2,7 +2,7 @@
   "name": "quick-merge-jenkins",
   "displayName": "Quick Merge Jenkins",
   "description": "Config-driven merge helper with Jenkins trigger support",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "publisher": "leesama-tools",
   "engines": {
     "vscode": "^1.85.0"
