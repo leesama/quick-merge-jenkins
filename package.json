@@ -1,0 +1,80 @@
+{
+  "name": "quick-merge-jenkins",
+  "displayName": "Quick Merge Jenkins",
+  "description": "Config-driven merge helper with Jenkins trigger support",
+  "version": "0.0.1",
+  "publisher": "leesama-tools",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "icon": "media/quick-merge.png",
+  "license": "MIT",
+  "categories": [
+    "SCM Providers"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:quickMergeView",
+    "onCommand:quick-merge.refresh",
+    "onCommand:quick-merge.openConflictFiles",
+    "onCommand:quick-merge.openMergeEditor",
+    "onCommand:quick-merge.openConfig"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "quickMergeContainer",
+          "title": "Quick Merge Jenkins",
+          "icon": "media/quick-merge.svg"
+        }
+      ]
+    },
+    "views": {
+      "quickMergeContainer": [
+        {
+          "id": "quickMergeView",
+          "name": "Quick Merge Jenkins",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "quick-merge.refresh",
+        "title": "Quick Merge Jenkins: Refresh Config"
+      },
+      {
+        "command": "quick-merge.openConflictFiles",
+        "title": "Quick Merge Jenkins: Open Conflict Files"
+      },
+      {
+        "command": "quick-merge.openMergeEditor",
+        "title": "Quick Merge Jenkins: Open Merge Editor"
+      },
+      {
+        "command": "quick-merge.openConfig",
+        "title": "Quick Merge Jenkins: Open Config File"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/leesama/quick-merge-jenkins"
+  },
+  "bugs": {
+    "url": "https://github.com/leesama/quick-merge-jenkins/issues"
+  },
+  "homepage": "https://github.com/leesama/quick-merge-jenkins"
+}
