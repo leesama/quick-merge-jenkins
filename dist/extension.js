@@ -37,6 +37,7 @@ exports.activate = activate;
 exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
 const node_child_process_1 = require("node:child_process");
+const fs = __importStar(require("node:fs"));
 const http = __importStar(require("node:http"));
 const https = __importStar(require("node:https"));
 const path = __importStar(require("node:path"));
@@ -50,11 +51,12 @@ const DEFAULT_UI_LABELS = {
 let lastFailureContext = null;
 let lastConflictFiles = [];
 let lastWorkspaceRoot = null;
-let lastConfigRoot = null;
-let lastConfigItems = [];
+let lastConfigRootsKey = "";
+let lastConfigGroups = [];
 let lastConfigError = "";
 let lastUiLabels = DEFAULT_UI_LABELS;
 let lastConfigLoaded = false;
+let lastHasMissingConfig = false;
 function activate(context) {
     const provider = new QuickMergeViewProvider(context);
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(QuickMergeViewProvider.viewType, provider), vscode.commands.registerCommand("quick-merge.refresh", () => provider.refresh()), vscode.commands.registerCommand("quick-merge.openConflictFiles", () => provider.openConflictFiles()), vscode.commands.registerCommand("quick-merge.openMergeEditor", () => provider.openMergeEditor()), vscode.commands.registerCommand("quick-merge.openConfig", () => provider.openConfig()));
@@ -64,8 +66,6 @@ function deactivate() { }
 class QuickMergeViewProvider {
     constructor(context) {
         this.context = context;
-        this.watchRoot = null;
-        this.watchDisposables = [];
     }
     resolveWebviewView(view) {
         this.view = view;
@@ -75,6 +75,11 @@ class QuickMergeViewProvider {
             if (message?.type === "requestState") {
                 const loadConfig = Boolean(message?.loadConfig);
                 await this.postState({ loadConfig });
+                return;
+            }
+            if (message?.type === "refreshRepo") {
+                const repoRoot = typeof message?.repoRoot === "string" ? message.repoRoot : "";
+                await this.postState({ loadConfig: true, repoRoot });
                 return;
             }
             if (message?.type === "merge") {
@@ -100,16 +105,16 @@ class QuickMergeViewProvider {
         });
         view.onDidChangeVisibility(() => {
             if (view.visible) {
-                void this.postState({ loadConfig: false });
+                void this.postState({ loadConfig: !lastConfigLoaded });
             }
         });
-        void this.postState({ loadConfig: false });
+        void this.postState({ loadConfig: !lastConfigLoaded });
     }
     refresh() {
         void this.postState({ loadConfig: true });
     }
     async openConflictFiles() {
-        const cwd = lastWorkspaceRoot ?? getWorkspaceRoot();
+        const cwd = lastWorkspaceRoot ?? (await resolveRepoRoot());
         if (!cwd) {
             void vscode.window.showErrorMessage("未找到工作区，无法打开冲突文件列表。");
             return;
@@ -128,7 +133,7 @@ class QuickMergeViewProvider {
         await vscode.window.showTextDocument(fileUri);
     }
     async openMergeEditor() {
-        const cwd = lastWorkspaceRoot ?? getWorkspaceRoot();
+        const cwd = lastWorkspaceRoot ?? (await resolveRepoRoot());
         if (!cwd) {
             void vscode.window.showErrorMessage("未找到工作区，无法打开合并编辑器。");
             return;
@@ -163,23 +168,35 @@ class QuickMergeViewProvider {
         }
     }
     async openConfig() {
-        const cwd = getWorkspaceRoot();
-        if (!cwd) {
+        const workspaceRoot = getWorkspaceRoot();
+        if (!workspaceRoot) {
             void vscode.window.showErrorMessage("未找到工作区，无法打开配置文件。");
             return;
         }
-        const configUri = vscode.Uri.file(path.join(cwd, CONFIG_FILE_NAME));
-        try {
-            await vscode.workspace.fs.stat(configUri);
+        const activeRepoRoot = await resolveRepoRoot();
+        const repoRoots = await resolveRepoRoots(activeRepoRoot ?? workspaceRoot);
+        if (repoRoots.length === 0) {
+            void vscode.window.showErrorMessage("未找到 Git 仓库，无法创建配置文件。");
+            return;
         }
-        catch {
-            const template = getDefaultConfigTemplate();
-            const content = Buffer.from(JSON.stringify(template, null, 2));
-            await vscode.workspace.fs.writeFile(configUri, content);
-        }
-        const doc = await vscode.workspace.openTextDocument(configUri);
+        const template = getDefaultConfigTemplate();
+        const content = Buffer.from(JSON.stringify(template, null, 2));
+        await Promise.all(repoRoots.map(async (repoRoot) => {
+            const configUri = vscode.Uri.file(path.join(repoRoot, CONFIG_FILE_NAME));
+            try {
+                await vscode.workspace.fs.stat(configUri);
+            }
+            catch {
+                await vscode.workspace.fs.writeFile(configUri, content);
+            }
+        }));
+        const openRoot = activeRepoRoot && repoRoots.includes(activeRepoRoot)
+            ? activeRepoRoot
+            : repoRoots[0];
+        const openUri = vscode.Uri.file(path.join(openRoot, CONFIG_FILE_NAME));
+        const doc = await vscode.workspace.openTextDocument(openUri);
         await vscode.window.showTextDocument(doc, { preview: false });
-        await this.postState({ loadConfig: false });
+        await this.postState({ loadConfig: true });
     }
     async checkoutOriginal() {
         if (!lastFailureContext) {
@@ -204,7 +221,8 @@ class QuickMergeViewProvider {
         }
     }
     async handleMerge(message) {
-        const cwd = getWorkspaceRoot();
+        const requestedRoot = typeof message?.repoRoot === "string" ? message.repoRoot : undefined;
+        const cwd = requestedRoot ?? (await resolveRepoRoot());
         if (!cwd) {
             this.postMessage({
                 type: "error",
@@ -247,53 +265,80 @@ class QuickMergeViewProvider {
         }
     }
     async postState(options) {
-        const cwd = getWorkspaceRoot();
+        const activeRepoRoot = await resolveRepoRoot();
         const loadConfig = options?.loadConfig ?? false;
-        if (!cwd) {
-            this.disposeGitWatchers();
-            lastConfigRoot = null;
-            lastConfigItems = [];
+        const refreshRepoRoot = typeof options?.repoRoot === "string" ? options.repoRoot : "";
+        if (!activeRepoRoot) {
+            lastConfigRootsKey = "";
+            lastConfigGroups = [];
             lastConfigError = "";
             lastUiLabels = DEFAULT_UI_LABELS;
             lastConfigLoaded = false;
+            lastHasMissingConfig = false;
             this.postMessage({
                 type: "state",
                 currentBranch: "",
+                configGroups: [],
                 configSummary: [],
                 configError: "未找到工作区。",
                 uiLabels: DEFAULT_UI_LABELS,
                 configLoaded: false,
+                hasMissingConfig: false,
             });
             return;
         }
-        lastWorkspaceRoot = cwd;
-        if (lastConfigRoot !== cwd) {
-            lastConfigRoot = cwd;
-            lastConfigItems = [];
+        lastWorkspaceRoot = activeRepoRoot;
+        const repoRoots = await resolveRepoRoots(activeRepoRoot);
+        const repoRootsKey = repoRoots.join("|");
+        const shouldRefreshGroup = loadConfig && refreshRepoRoot && repoRoots.includes(refreshRepoRoot);
+        if (lastConfigRootsKey !== repoRootsKey) {
+            lastConfigRootsKey = repoRootsKey;
+            lastConfigGroups = [];
             lastConfigError = "";
             lastUiLabels = DEFAULT_UI_LABELS;
             lastConfigLoaded = false;
+            lastHasMissingConfig = false;
         }
-        this.setupGitWatchers(cwd);
         try {
-            const [currentBranch, remotes] = await Promise.all([
-                getCurrentBranch(cwd),
-                listRemotes(cwd),
-            ]);
+            const currentBranch = activeRepoRoot
+                ? await getCurrentBranch(activeRepoRoot).catch(() => "")
+                : "";
             if (loadConfig) {
-                const { items, error, uiLabels } = await getConfigSummary(cwd, currentBranch, remotes);
-                lastConfigItems = items;
-                lastConfigError = error;
-                lastUiLabels = uiLabels;
-                lastConfigLoaded = true;
+                if (shouldRefreshGroup && lastConfigLoaded) {
+                    const { group, uiLabels } = await getConfigGroup(refreshRepoRoot);
+                    const nextGroups = [...lastConfigGroups];
+                    const index = nextGroups.findIndex((item) => item.repoRoot === refreshRepoRoot);
+                    if (index >= 0) {
+                        nextGroups[index] = group;
+                    }
+                    else {
+                        nextGroups.push(group);
+                    }
+                    lastConfigGroups = nextGroups;
+                    if (repoRoots.length === 1) {
+                        lastUiLabels = uiLabels;
+                    }
+                    lastConfigLoaded = true;
+                    lastHasMissingConfig = nextGroups.some((item) => item && item.missingConfig);
+                }
+                else {
+                    const { groups, error, uiLabels } = await getConfigGroups(repoRoots);
+                    lastConfigGroups = groups;
+                    lastConfigError = error;
+                    lastUiLabels = uiLabels;
+                    lastConfigLoaded = true;
+                    lastHasMissingConfig = groups.some((item) => item && item.missingConfig);
+                }
             }
             this.postMessage({
                 type: "state",
                 currentBranch,
-                configSummary: lastConfigItems,
+                configGroups: lastConfigGroups,
+                configSummary: lastConfigGroups.flatMap((group) => group.items),
                 configError: lastConfigError,
                 uiLabels: lastUiLabels,
                 configLoaded: lastConfigLoaded,
+                hasMissingConfig: lastHasMissingConfig,
             });
         }
         catch (error) {
@@ -302,34 +347,6 @@ class QuickMergeViewProvider {
                 message: getErrorMessage(error),
             });
         }
-    }
-    setupGitWatchers(cwd) {
-        if (this.watchRoot === cwd) {
-            return;
-        }
-        this.disposeGitWatchers();
-        this.watchRoot = cwd;
-        const patterns = [
-            new vscode.RelativePattern(cwd, ".git/HEAD"),
-            new vscode.RelativePattern(cwd, ".git/packed-refs"),
-            new vscode.RelativePattern(cwd, ".git/refs/heads/**"),
-        ];
-        for (const pattern of patterns) {
-            const watcher = vscode.workspace.createFileSystemWatcher(pattern);
-            const onChange = () => void this.postState();
-            watcher.onDidChange(onChange);
-            watcher.onDidCreate(onChange);
-            watcher.onDidDelete(onChange);
-            this.watchDisposables.push(watcher);
-            this.context.subscriptions.push(watcher);
-        }
-    }
-    disposeGitWatchers() {
-        for (const disposable of this.watchDisposables) {
-            disposable.dispose();
-        }
-        this.watchDisposables = [];
-        this.watchRoot = null;
     }
     postMessage(message) {
         void this.view?.webview.postMessage(message);
@@ -434,10 +451,58 @@ class QuickMergeViewProvider {
       flex: 1;
     }
 
+    .footer-actions {
+      margin-bottom: 16px;
+    }
+
+    .footer-actions .row {
+      margin-top: 6px;
+    }
+
+    .footer-actions button {
+      padding: 6px 10px;
+      font-size: 0.9em;
+    }
+
     .config-list {
       display: flex;
       flex-direction: column;
       gap: 12px;
+    }
+
+    .config-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 6px;
+      padding: 10px;
+    }
+
+    .config-group-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .config-group-title {
+      font-weight: 600;
+      color: var(--vscode-foreground);
+    }
+
+    .config-group-header .config-group-title {
+      flex: 1;
+    }
+
+    .config-group-actions button {
+      width: auto;
+      padding: 4px 8px;
+      font-size: 0.85em;
+    }
+
+    .config-group-error {
+      color: var(--vscode-errorForeground);
     }
 
     .config-item {
@@ -523,16 +588,17 @@ class QuickMergeViewProvider {
   </style>
 </head>
 <body>
-  <div class="field">
-    <label>合并配置</label>
-    <div class="config-list" id="configList"></div>
+  <div class="footer-actions">
+    <div class="row" id="refreshRow">
+      <button id="refreshBtn" class="secondary">刷新配置</button>
+    </div>
+    <div class="row" id="createConfigRow" hidden>
+      <button id="createConfigBtn" class="secondary">创建配置文件</button>
+    </div>
   </div>
 
-  <div class="row">
-    <button id="refreshBtn" class="secondary">刷新配置</button>
-  </div>
-  <div class="row">
-    <button id="openConfigBtn" class="secondary">打开配置文件</button>
+  <div class="field">
+    <div class="config-list" id="configList"></div>
   </div>
 
   <div class="status" id="status"></div>
@@ -555,6 +621,7 @@ class QuickMergeViewProvider {
     </div>
   </div>
 
+
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const configListEl = document.getElementById('configList');
@@ -563,8 +630,10 @@ class QuickMergeViewProvider {
     const resultContent = document.getElementById('resultContent');
     const conflictSection = document.getElementById('conflictSection');
     const conflictContent = document.getElementById('conflictContent');
+    const refreshRow = document.getElementById('refreshRow');
     const refreshBtn = document.getElementById('refreshBtn');
-    const openConfigBtn = document.getElementById('openConfigBtn');
+    const createConfigRow = document.getElementById('createConfigRow');
+    const createConfigBtn = document.getElementById('createConfigBtn');
 
     function setStatus(text, type = 'info') {
       statusEl.textContent = text || '';
@@ -590,21 +659,64 @@ class QuickMergeViewProvider {
 
     function setBusy(isBusy) {
       refreshBtn.disabled = isBusy;
-      openConfigBtn.disabled = isBusy;
+      createConfigBtn.disabled = isBusy;
       const configButtons = configListEl.querySelectorAll('button');
       configButtons.forEach((button) => {
         button.disabled = isBusy;
       });
     }
 
+    function appendConfigItems(container, items, repoRoot) {
+      for (const item of items) {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'config-item';
+        const btn = document.createElement('button');
+        btn.textContent = item.label || '执行合并';
+        btn.addEventListener('click', () => {
+          setBusy(true);
+          setStatus('正在执行合并...', 'info');
+          const payload = { type: 'merge', profileKey: item.key };
+          if (repoRoot) {
+            payload.repoRoot = repoRoot;
+          }
+          vscode.postMessage(payload);
+        });
+        itemEl.appendChild(btn);
+        const summary = Array.isArray(item.summary) ? item.summary : [];
+        if (summary.length > 0) {
+          const pre = document.createElement('pre');
+          pre.textContent = summary.join('\\n');
+          itemEl.appendChild(pre);
+        }
+        container.appendChild(itemEl);
+      }
+    }
+
+    function shouldShowCreateConfig(groups) {
+      if (!Array.isArray(groups) || groups.length === 0) {
+        return false;
+      }
+      return groups.some((group) => group && group.missingConfig);
+    }
+
+    function updateActionButtons(showCreate) {
+      refreshRow.hidden = showCreate;
+      createConfigRow.hidden = !showCreate;
+    }
+
     function renderState(data) {
+      const groups = Array.isArray(data.configGroups) ? data.configGroups : [];
       const items = Array.isArray(data.configSummary) ? data.configSummary : [];
       const error = data.configError || '';
       const uiLabels = data.uiLabels || {};
       const configLoaded = Boolean(data.configLoaded);
+      const hasMissingConfig = typeof data.hasMissingConfig === 'boolean'
+        ? data.hasMissingConfig
+        : shouldShowCreateConfig(groups);
       refreshBtn.textContent = uiLabels.refreshLabel || '刷新配置';
-      openConfigBtn.textContent = uiLabels.openConfigLabel || '打开配置文件';
       configListEl.innerHTML = '';
+      const showCreate = configLoaded && hasMissingConfig;
+      updateActionButtons(showCreate);
       if (error) {
         const errorEl = document.createElement('div');
         errorEl.textContent = '配置错误: ' + error;
@@ -617,31 +729,76 @@ class QuickMergeViewProvider {
         configListEl.appendChild(hintEl);
         return;
       }
+      if (groups.length === 1) {
+        const group = groups[0] || {};
+        if (group.error) {
+          const groupError = document.createElement('div');
+          groupError.textContent = '配置错误: ' + group.error;
+          configListEl.appendChild(groupError);
+          return;
+        }
+        const groupItems = Array.isArray(group.items) ? group.items : [];
+        if (groupItems.length === 0) {
+          const emptyEl = document.createElement('div');
+          emptyEl.textContent = '未找到可用的合并配置。';
+          configListEl.appendChild(emptyEl);
+          return;
+        }
+        appendConfigItems(configListEl, groupItems, group.repoRoot);
+        return;
+      }
+      if (groups.length > 1) {
+        for (const group of groups) {
+          const groupEl = document.createElement('div');
+          groupEl.className = 'config-group';
+          const label = group.repoLabel || group.repoRoot || 'Git 项目';
+          const headerEl = document.createElement('div');
+          headerEl.className = 'config-group-header';
+          const titleEl = document.createElement('div');
+          titleEl.className = 'config-group-title';
+          titleEl.textContent = label;
+          headerEl.appendChild(titleEl);
+          if (!showCreate && group.repoRoot) {
+            const actionsEl = document.createElement('div');
+            actionsEl.className = 'config-group-actions';
+            const refreshGroupBtn = document.createElement('button');
+            refreshGroupBtn.className = 'secondary';
+            refreshGroupBtn.textContent = uiLabels.refreshLabel || '刷新配置';
+            refreshGroupBtn.addEventListener('click', () => {
+              vscode.postMessage({
+                type: 'refreshRepo',
+                repoRoot: group.repoRoot,
+              });
+            });
+            actionsEl.appendChild(refreshGroupBtn);
+            headerEl.appendChild(actionsEl);
+          }
+          groupEl.appendChild(headerEl);
+          if (group.error) {
+            const groupError = document.createElement('div');
+            groupError.className = 'config-group-error';
+            groupError.textContent = '配置错误: ' + group.error;
+            groupEl.appendChild(groupError);
+          }
+          const groupItems = Array.isArray(group.items) ? group.items : [];
+          if (groupItems.length === 0 && !group.error) {
+            const emptyEl = document.createElement('div');
+            emptyEl.textContent = '未找到可用的合并配置。';
+            groupEl.appendChild(emptyEl);
+          } else {
+            appendConfigItems(groupEl, groupItems, group.repoRoot);
+          }
+          configListEl.appendChild(groupEl);
+        }
+        return;
+      }
       if (items.length === 0) {
         const emptyEl = document.createElement('div');
         emptyEl.textContent = '未找到可用的合并配置。';
         configListEl.appendChild(emptyEl);
         return;
       }
-      for (const item of items) {
-        const itemEl = document.createElement('div');
-        itemEl.className = 'config-item';
-        const btn = document.createElement('button');
-        btn.textContent = item.label || '执行合并';
-        btn.addEventListener('click', () => {
-          setBusy(true);
-          setStatus('正在执行合并...', 'info');
-          vscode.postMessage({ type: 'merge', profileKey: item.key });
-        });
-        itemEl.appendChild(btn);
-        const summary = Array.isArray(item.summary) ? item.summary : [];
-        if (summary.length > 0) {
-          const pre = document.createElement('pre');
-          pre.textContent = summary.join('\\n');
-          itemEl.appendChild(pre);
-        }
-        configListEl.appendChild(itemEl);
-      }
+      appendConfigItems(configListEl, items);
     }
 
     function renderResult(result) {
@@ -734,7 +891,7 @@ class QuickMergeViewProvider {
       vscode.postMessage({ type: 'requestState', loadConfig: true });
     });
 
-    openConfigBtn.addEventListener('click', () => {
+    createConfigBtn.addEventListener('click', () => {
       vscode.postMessage({ type: 'openConfig' });
     });
 
@@ -892,9 +1049,49 @@ async function loadMergePlan(cwd, profileKey) {
     const profile = selectProfile(profiles, profileKey);
     return resolveMergePlan(profile, currentBranch, remotes);
 }
-async function getConfigSummary(cwd, currentBranch, remotes) {
+async function getConfigGroups(repoRoots) {
+    if (repoRoots.length === 0) {
+        return {
+            groups: [],
+            error: "未找到 Git 仓库。",
+            uiLabels: DEFAULT_UI_LABELS,
+        };
+    }
+    const results = await Promise.all(repoRoots.map((repoRoot) => getConfigGroup(repoRoot)));
+    const groups = results.map((result) => result.group);
+    let uiLabels = DEFAULT_UI_LABELS;
+    if (repoRoots.length === 1) {
+        for (const result of results) {
+            if (!result.group.error) {
+                uiLabels = result.uiLabels;
+                break;
+            }
+        }
+    }
+    return { groups, error: "", uiLabels };
+}
+async function getConfigGroup(repoRoot) {
+    const repoLabel = formatRepoLabel(repoRoot);
+    const configPath = path.join(repoRoot, CONFIG_FILE_NAME);
+    const hasConfig = await pathExists(configPath);
+    if (!hasConfig) {
+        return {
+            group: {
+                repoRoot,
+                repoLabel,
+                items: [],
+                error: `未找到配置文件 ${CONFIG_FILE_NAME}。`,
+                missingConfig: true,
+            },
+            uiLabels: DEFAULT_UI_LABELS,
+        };
+    }
     try {
-        const configFile = await readMergeConfig(cwd);
+        const [currentBranch, remotes] = await Promise.all([
+            getCurrentBranch(repoRoot),
+            listRemotes(repoRoot),
+        ]);
+        const configFile = await readMergeConfig(repoRoot);
         const normalized = normalizeConfigFile(configFile);
         const items = normalized.profiles.map((profile, index) => {
             const key = getProfileKey(profile, index);
@@ -915,12 +1112,25 @@ async function getConfigSummary(cwd, currentBranch, remotes) {
                 };
             }
         });
-        return { items, error: "", uiLabels: normalized.uiLabels };
+        return {
+            group: {
+                repoRoot,
+                repoLabel,
+                items,
+                missingConfig: false,
+            },
+            uiLabels: normalized.uiLabels,
+        };
     }
     catch (error) {
         return {
-            items: [],
-            error: getErrorMessage(error),
+            group: {
+                repoRoot,
+                repoLabel,
+                items: [],
+                error: getErrorMessage(error),
+                missingConfig: false,
+            },
             uiLabels: DEFAULT_UI_LABELS,
         };
     }
@@ -1300,6 +1510,144 @@ function getWorkspaceRoot() {
         }
     }
     return folders[0].uri.fsPath;
+}
+async function resolveRepoRoot() {
+    const workspaceRoot = getWorkspaceRoot();
+    if (!workspaceRoot) {
+        return null;
+    }
+    const candidates = [];
+    const activeUri = vscode.window.activeTextEditor?.document?.uri;
+    if (activeUri?.scheme === "file") {
+        candidates.push(activeUri.fsPath);
+    }
+    if (lastWorkspaceRoot && lastWorkspaceRoot !== workspaceRoot) {
+        candidates.push(lastWorkspaceRoot);
+    }
+    candidates.push(workspaceRoot);
+    for (const candidate of candidates) {
+        const repoRoot = await findGitRoot(candidate);
+        if (repoRoot) {
+            return repoRoot;
+        }
+    }
+    return workspaceRoot;
+}
+async function resolveRepoRoots(fallbackRoot) {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) {
+        return [];
+    }
+    const roots = new Set();
+    const maxDepth = 3;
+    for (const folder of folders) {
+        await scanRepoRootsByDepth(folder.uri.fsPath, maxDepth, roots);
+    }
+    if (fallbackRoot) {
+        const repoRoot = await findGitRoot(fallbackRoot);
+        if (repoRoot) {
+            roots.add(repoRoot);
+        }
+    }
+    return Array.from(roots).sort((a, b) => a.localeCompare(b));
+}
+const SCAN_SKIP_DIRS = new Set([
+    "node_modules",
+    "dist",
+    "out",
+    "build",
+    "coverage",
+    ".vscode",
+    ".idea",
+]);
+function shouldSkipScanDir(name) {
+    return SCAN_SKIP_DIRS.has(name);
+}
+async function scanRepoRootsByDepth(root, maxDepth, roots) {
+    async function scanDir(dir, depth) {
+        let entries;
+        try {
+            entries = await fs.promises.readdir(dir, { withFileTypes: true });
+        }
+        catch {
+            return;
+        }
+        for (const entry of entries) {
+            if (entry.name === ".git") {
+                roots.add(dir);
+                continue;
+            }
+            if (entry.name === CONFIG_FILE_NAME &&
+                (entry.isFile() || entry.isSymbolicLink())) {
+                roots.add(dir);
+            }
+        }
+        if (depth >= maxDepth) {
+            return;
+        }
+        const nextDepth = depth + 1;
+        for (const entry of entries) {
+            if (!entry.isDirectory()) {
+                continue;
+            }
+            if (entry.isSymbolicLink()) {
+                continue;
+            }
+            if (entry.name === ".git") {
+                continue;
+            }
+            if (shouldSkipScanDir(entry.name)) {
+                continue;
+            }
+            await scanDir(path.join(dir, entry.name), nextDepth);
+        }
+    }
+    await scanDir(root, 0);
+}
+function formatRepoLabel(repoRoot) {
+    const relative = vscode.workspace.asRelativePath(repoRoot, true);
+    if (!relative || relative === "." || relative === repoRoot) {
+        return path.basename(repoRoot);
+    }
+    return relative;
+}
+async function findGitRoot(startPath) {
+    const startDir = await normalizeStartDirectory(startPath);
+    if (!startDir) {
+        return null;
+    }
+    let current = startDir;
+    while (true) {
+        if (await pathExists(path.join(current, ".git"))) {
+            return current;
+        }
+        const parent = path.dirname(current);
+        if (parent === current) {
+            return null;
+        }
+        current = parent;
+    }
+}
+async function normalizeStartDirectory(startPath) {
+    try {
+        const stat = await vscode.workspace.fs.stat(vscode.Uri.file(startPath));
+        if (stat.type & vscode.FileType.Directory) {
+            return startPath;
+        }
+        return path.dirname(startPath);
+    }
+    catch {
+        return null;
+    }
+}
+async function pathExists(filePath) {
+    try {
+        await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
+        return true;
+    }
+    catch {
+        return false;
+    }
 }
 function getErrorMessage(error) {
     if (!error) {
