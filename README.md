@@ -19,7 +19,7 @@ Config-driven VSCode merge helper. It reads `.quick-merge.json` from the project
 3. Edit the config, then click the refresh icon again to reload
 4. Click a profile button to run the merge
 
-> Note: refresh is optional; it's only for a more visual/manual update. For performance reasons, dynamic file watching is not enabled.
+> Note: The config is always read dynamically when executing a merge. Refresh is optional and only serves to visually update the button list in the sidebar—it does not affect actual config reading. For performance reasons, automatic file watching is not currently implemented.
 > You can also run `Quick Merge Jenkins: Open Config File` from the Command Palette.
 
 ## Config File
