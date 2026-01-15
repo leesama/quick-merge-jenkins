@@ -36,27 +36,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
 exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
-const node_child_process_1 = require("node:child_process");
-const fs = __importStar(require("node:fs"));
-const http = __importStar(require("node:http"));
-const https = __importStar(require("node:https"));
 const path = __importStar(require("node:path"));
-const node_util_1 = require("node:util");
-const execFileAsync = (0, node_util_1.promisify)(node_child_process_1.execFile);
-const CONFIG_FILE_NAME = ".quick-merge.json";
-const DEFAULT_UI_LABELS = {
-    refreshLabel: "刷新配置",
-    openConfigLabel: "打开配置文件",
-};
-let lastFailureContext = null;
-let lastConflictFiles = [];
-let lastWorkspaceRoot = null;
-let lastConfigRootsKey = "";
-let lastConfigGroups = [];
-let lastConfigError = "";
-let lastUiLabels = DEFAULT_UI_LABELS;
-let lastConfigLoaded = false;
-let lastHasMissingConfig = false;
+const constants_1 = require("./constants");
+const config_1 = require("./config");
+const config_groups_1 = require("./config-groups");
+const git_1 = require("./git");
+const merge_1 = require("./merge");
+const repo_1 = require("./repo");
+const state_1 = require("./state");
+const utils_1 = require("./utils");
+const webview_1 = require("./webview");
 function activate(context) {
     const provider = new QuickMergeViewProvider(context);
     context.subscriptions.push(vscode.window.registerWebviewViewProvider(QuickMergeViewProvider.viewType, provider), vscode.commands.registerCommand("quick-merge.refresh", () => provider.refresh()), vscode.commands.registerCommand("quick-merge.openConflictFiles", () => provider.openConflictFiles()), vscode.commands.registerCommand("quick-merge.openMergeEditor", () => provider.openMergeEditor()), vscode.commands.registerCommand("quick-merge.openConfig", () => provider.openConfig()));
@@ -70,7 +59,7 @@ class QuickMergeViewProvider {
     resolveWebviewView(view) {
         this.view = view;
         view.webview.options = { enableScripts: true };
-        view.webview.html = this.getHtml(view.webview);
+        view.webview.html = (0, webview_1.getWebviewHtml)(view.webview);
         view.webview.onDidReceiveMessage(async (message) => {
             if (message?.type === "requestState") {
                 const loadConfig = Boolean(message?.loadConfig);
@@ -105,25 +94,25 @@ class QuickMergeViewProvider {
         });
         view.onDidChangeVisibility(() => {
             if (view.visible) {
-                void this.postState({ loadConfig: !lastConfigLoaded });
+                void this.postState({ loadConfig: !state_1.state.lastConfigLoaded });
             }
         });
-        void this.postState({ loadConfig: !lastConfigLoaded });
+        void this.postState({ loadConfig: !state_1.state.lastConfigLoaded });
     }
     refresh() {
         void this.postState({ loadConfig: true });
     }
     async openConflictFiles() {
-        const cwd = lastWorkspaceRoot ?? (await resolveRepoRoot());
+        const cwd = state_1.state.lastWorkspaceRoot ?? (await (0, repo_1.resolveRepoRoot)());
         if (!cwd) {
             void vscode.window.showErrorMessage("未找到工作区，无法打开冲突文件列表。");
             return;
         }
-        if (lastConflictFiles.length === 0) {
+        if (state_1.state.lastConflictFiles.length === 0) {
             void vscode.window.showInformationMessage("当前没有检测到冲突文件。");
             return;
         }
-        const pick = await vscode.window.showQuickPick(lastConflictFiles, {
+        const pick = await vscode.window.showQuickPick(state_1.state.lastConflictFiles, {
             placeHolder: "选择要打开的冲突文件",
         });
         if (!pick) {
@@ -133,18 +122,18 @@ class QuickMergeViewProvider {
         await vscode.window.showTextDocument(fileUri);
     }
     async openMergeEditor() {
-        const cwd = lastWorkspaceRoot ?? (await resolveRepoRoot());
+        const cwd = state_1.state.lastWorkspaceRoot ?? (await (0, repo_1.resolveRepoRoot)());
         if (!cwd) {
             void vscode.window.showErrorMessage("未找到工作区，无法打开合并编辑器。");
             return;
         }
-        if (lastConflictFiles.length === 0) {
+        if (state_1.state.lastConflictFiles.length === 0) {
             void vscode.window.showInformationMessage("当前没有检测到冲突文件。");
             return;
         }
-        let target = lastConflictFiles[0];
-        if (lastConflictFiles.length > 1) {
-            const pick = await vscode.window.showQuickPick(lastConflictFiles, {
+        let target = state_1.state.lastConflictFiles[0];
+        if (state_1.state.lastConflictFiles.length > 1) {
+            const pick = await vscode.window.showQuickPick(state_1.state.lastConflictFiles, {
                 placeHolder: "选择要在合并编辑器中打开的文件",
             });
             if (!pick) {
@@ -168,21 +157,21 @@ class QuickMergeViewProvider {
         }
     }
     async openConfig() {
-        const workspaceRoot = getWorkspaceRoot();
+        const workspaceRoot = (0, repo_1.getWorkspaceRoot)();
         if (!workspaceRoot) {
             void vscode.window.showErrorMessage("未找到工作区，无法打开配置文件。");
             return;
         }
-        const activeRepoRoot = await resolveRepoRoot();
-        const repoRoots = await resolveRepoRoots(activeRepoRoot ?? workspaceRoot);
+        const activeRepoRoot = await (0, repo_1.resolveRepoRoot)();
+        const repoRoots = await (0, repo_1.resolveRepoRoots)(activeRepoRoot ?? workspaceRoot);
         if (repoRoots.length === 0) {
             void vscode.window.showErrorMessage("未找到 Git 仓库，无法创建配置文件。");
             return;
         }
-        const template = getDefaultConfigTemplate();
+        const template = (0, config_1.getDefaultConfigTemplate)();
         const content = Buffer.from(JSON.stringify(template, null, 2));
         await Promise.all(repoRoots.map(async (repoRoot) => {
-            const configUri = vscode.Uri.file(path.join(repoRoot, CONFIG_FILE_NAME));
+            const configUri = vscode.Uri.file(path.join(repoRoot, constants_1.CONFIG_FILE_NAME));
             try {
                 await vscode.workspace.fs.stat(configUri);
             }
@@ -193,20 +182,20 @@ class QuickMergeViewProvider {
         const openRoot = activeRepoRoot && repoRoots.includes(activeRepoRoot)
             ? activeRepoRoot
             : repoRoots[0];
-        const openUri = vscode.Uri.file(path.join(openRoot, CONFIG_FILE_NAME));
+        const openUri = vscode.Uri.file(path.join(openRoot, constants_1.CONFIG_FILE_NAME));
         const doc = await vscode.workspace.openTextDocument(openUri);
         await vscode.window.showTextDocument(doc, { preview: false });
         await this.postState({ loadConfig: true });
     }
     async checkoutOriginal() {
-        if (!lastFailureContext) {
+        if (!state_1.state.lastFailureContext) {
             void vscode.window.showInformationMessage("没有需要返回的原分支。");
             return;
         }
         try {
-            await runGit(["checkout", lastFailureContext.originalBranch], lastFailureContext.cwd);
-            lastFailureContext = null;
-            lastConflictFiles = [];
+            await (0, git_1.runGit)(["checkout", state_1.state.lastFailureContext.originalBranch], state_1.state.lastFailureContext.cwd);
+            state_1.state.lastFailureContext = null;
+            state_1.state.lastConflictFiles = [];
             await this.postState({ loadConfig: false });
             this.postMessage({
                 type: "info",
@@ -216,13 +205,13 @@ class QuickMergeViewProvider {
         catch (error) {
             this.postMessage({
                 type: "error",
-                message: `返回原分支失败：${getErrorMessage(error)}`,
+                message: `返回原分支失败：${(0, utils_1.getErrorMessage)(error)}`,
             });
         }
     }
     async handleMerge(message) {
         const requestedRoot = typeof message?.repoRoot === "string" ? message.repoRoot : undefined;
-        const cwd = requestedRoot ?? (await resolveRepoRoot());
+        const cwd = requestedRoot ?? (await (0, repo_1.resolveRepoRoot)());
         if (!cwd) {
             this.postMessage({
                 type: "error",
@@ -230,26 +219,26 @@ class QuickMergeViewProvider {
             });
             return;
         }
-        lastWorkspaceRoot = cwd;
+        state_1.state.lastWorkspaceRoot = cwd;
         this.postMessage({
             type: "mergeStarted",
             message: "正在执行合并...",
         });
         try {
             const profileKey = typeof message?.profileKey === "string" ? message.profileKey : undefined;
-            const plan = await loadMergePlan(cwd, profileKey);
-            const result = await performMerge(cwd, plan);
+            const plan = await (0, merge_1.loadMergePlan)(cwd, profileKey);
+            const result = await (0, merge_1.performMerge)(cwd, plan);
             if (result.status === "failed") {
-                lastFailureContext = {
+                state_1.state.lastFailureContext = {
                     originalBranch: result.currentBranch,
                     targetBranch: result.targetBranch,
                     cwd,
                 };
-                lastConflictFiles = result.conflicts;
+                state_1.state.lastConflictFiles = result.conflicts;
             }
             else {
-                lastFailureContext = null;
-                lastConflictFiles = [];
+                state_1.state.lastFailureContext = null;
+                state_1.state.lastConflictFiles = [];
             }
             this.postMessage({
                 type: "result",
@@ -260,53 +249,53 @@ class QuickMergeViewProvider {
         catch (error) {
             this.postMessage({
                 type: "error",
-                message: getErrorMessage(error),
+                message: (0, utils_1.getErrorMessage)(error),
             });
         }
     }
     async postState(options) {
-        const activeRepoRoot = await resolveRepoRoot();
+        const activeRepoRoot = await (0, repo_1.resolveRepoRoot)();
         const loadConfig = options?.loadConfig ?? false;
         const refreshRepoRoot = typeof options?.repoRoot === "string" ? options.repoRoot : "";
         if (!activeRepoRoot) {
-            lastConfigRootsKey = "";
-            lastConfigGroups = [];
-            lastConfigError = "";
-            lastUiLabels = DEFAULT_UI_LABELS;
-            lastConfigLoaded = false;
-            lastHasMissingConfig = false;
+            state_1.state.lastConfigRootsKey = "";
+            state_1.state.lastConfigGroups = [];
+            state_1.state.lastConfigError = "";
+            state_1.state.lastUiLabels = constants_1.DEFAULT_UI_LABELS;
+            state_1.state.lastConfigLoaded = false;
+            state_1.state.lastHasMissingConfig = false;
             this.postMessage({
                 type: "state",
                 currentBranch: "",
                 configGroups: [],
                 configSummary: [],
                 configError: "未找到工作区。",
-                uiLabels: DEFAULT_UI_LABELS,
+                uiLabels: constants_1.DEFAULT_UI_LABELS,
                 configLoaded: false,
                 hasMissingConfig: false,
             });
             return;
         }
-        lastWorkspaceRoot = activeRepoRoot;
-        const repoRoots = await resolveRepoRoots(activeRepoRoot);
+        state_1.state.lastWorkspaceRoot = activeRepoRoot;
+        const repoRoots = await (0, repo_1.resolveRepoRoots)(activeRepoRoot);
         const repoRootsKey = repoRoots.join("|");
         const shouldRefreshGroup = loadConfig && refreshRepoRoot && repoRoots.includes(refreshRepoRoot);
-        if (lastConfigRootsKey !== repoRootsKey) {
-            lastConfigRootsKey = repoRootsKey;
-            lastConfigGroups = [];
-            lastConfigError = "";
-            lastUiLabels = DEFAULT_UI_LABELS;
-            lastConfigLoaded = false;
-            lastHasMissingConfig = false;
+        if (state_1.state.lastConfigRootsKey !== repoRootsKey) {
+            state_1.state.lastConfigRootsKey = repoRootsKey;
+            state_1.state.lastConfigGroups = [];
+            state_1.state.lastConfigError = "";
+            state_1.state.lastUiLabels = constants_1.DEFAULT_UI_LABELS;
+            state_1.state.lastConfigLoaded = false;
+            state_1.state.lastHasMissingConfig = false;
         }
         try {
             const currentBranch = activeRepoRoot
-                ? await getCurrentBranch(activeRepoRoot).catch(() => "")
+                ? await (0, git_1.getCurrentBranch)(activeRepoRoot).catch(() => "")
                 : "";
             if (loadConfig) {
-                if (shouldRefreshGroup && lastConfigLoaded) {
-                    const { group, uiLabels } = await getConfigGroup(refreshRepoRoot);
-                    const nextGroups = [...lastConfigGroups];
+                if (shouldRefreshGroup && state_1.state.lastConfigLoaded) {
+                    const { group, uiLabels } = await (0, config_groups_1.getConfigGroup)(refreshRepoRoot);
+                    const nextGroups = [...state_1.state.lastConfigGroups];
                     const index = nextGroups.findIndex((item) => item.repoRoot === refreshRepoRoot);
                     if (index >= 0) {
                         nextGroups[index] = group;
@@ -314,1358 +303,45 @@ class QuickMergeViewProvider {
                     else {
                         nextGroups.push(group);
                     }
-                    lastConfigGroups = nextGroups;
+                    state_1.state.lastConfigGroups = nextGroups;
                     if (repoRoots.length === 1) {
-                        lastUiLabels = uiLabels;
+                        state_1.state.lastUiLabels = uiLabels;
                     }
-                    lastConfigLoaded = true;
-                    lastHasMissingConfig = nextGroups.some((item) => item && item.missingConfig);
+                    state_1.state.lastConfigLoaded = true;
+                    state_1.state.lastHasMissingConfig = nextGroups.some((item) => item && item.missingConfig);
                 }
                 else {
-                    const { groups, error, uiLabels } = await getConfigGroups(repoRoots);
-                    lastConfigGroups = groups;
-                    lastConfigError = error;
-                    lastUiLabels = uiLabels;
-                    lastConfigLoaded = true;
-                    lastHasMissingConfig = groups.some((item) => item && item.missingConfig);
+                    const { groups, error, uiLabels } = await (0, config_groups_1.getConfigGroups)(repoRoots);
+                    state_1.state.lastConfigGroups = groups;
+                    state_1.state.lastConfigError = error;
+                    state_1.state.lastUiLabels = uiLabels;
+                    state_1.state.lastConfigLoaded = true;
+                    state_1.state.lastHasMissingConfig = groups.some((item) => item && item.missingConfig);
                 }
             }
             this.postMessage({
                 type: "state",
                 currentBranch,
-                configGroups: lastConfigGroups,
-                configSummary: lastConfigGroups.flatMap((group) => group.items),
-                configError: lastConfigError,
-                uiLabels: lastUiLabels,
-                configLoaded: lastConfigLoaded,
-                hasMissingConfig: lastHasMissingConfig,
+                configGroups: state_1.state.lastConfigGroups,
+                configSummary: state_1.state.lastConfigGroups.flatMap((group) => group.items),
+                configError: state_1.state.lastConfigError,
+                uiLabels: state_1.state.lastUiLabels,
+                configLoaded: state_1.state.lastConfigLoaded,
+                hasMissingConfig: state_1.state.lastHasMissingConfig,
             });
         }
         catch (error) {
             this.postMessage({
                 type: "error",
-                message: getErrorMessage(error),
+                message: (0, utils_1.getErrorMessage)(error),
             });
         }
     }
     postMessage(message) {
         void this.view?.webview.postMessage(message);
     }
-    getHtml(webview) {
-        const nonce = getNonce();
-        return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Quick Merge</title>
-  <style>
-    :root {
-      --container-paddding: 20px;
-      --input-padding-vertical: 6px;
-      --input-padding-horizontal: 8px;
-      --input-margin-vertical: 6px;
-      --label-margin-vertical: 4px;
-    }
-
-    body {
-      padding: var(--container-paddding);
-      color: var(--vscode-foreground);
-      font-family: var(--vscode-font-family);
-      font-size: var(--vscode-font-size);
-      font-weight: var(--vscode-font-weight);
-    }
-
-    h2 {
-      font-size: 1.2rem;
-      font-weight: 600;
-      margin: 0 0 16px 0;
-      padding-bottom: 8px;
-      border-bottom: 1px solid var(--vscode-panel-border);
-    }
-
-    .field {
-      margin-bottom: 16px;
-    }
-
-    label {
-      display: block;
-      margin-bottom: var(--label-margin-vertical);
-      font-weight: 500;
-      color: var(--vscode-descriptionForeground);
-    }
-
-    select {
-      width: 100%;
-      padding: var(--input-padding-vertical) var(--input-padding-horizontal);
-      background-color: var(--vscode-dropdown-background);
-      color: var(--vscode-dropdown-foreground);
-      border: 1px solid var(--vscode-dropdown-border);
-      outline: none;
-      box-sizing: border-box;
-      border-radius: 2px;
-    }
-
-    select:focus {
-      border-color: var(--vscode-focusBorder);
-    }
-
-    button {
-      width: 100%;
-      padding: 8px 12px;
-      background-color: var(--vscode-button-background);
-      color: var(--vscode-button-foreground);
-      border: none;
-      outline: none;
-      cursor: pointer;
-      font-family: inherit;
-      border-radius: 2px;
-    }
-
-    button:hover {
-      background-color: var(--vscode-button-hoverBackground);
-    }
-
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    button.secondary {
-      background-color: var(--vscode-button-secondaryBackground);
-      color: var(--vscode-button-secondaryForeground);
-    }
-
-    button.secondary:hover {
-      background-color: var(--vscode-button-secondaryHoverBackground);
-    }
-
-    .row {
-      display: flex;
-      gap: 10px;
-      margin-top: 10px;
-    }
-
-    .row button {
-      flex: 1;
-    }
-
-    .footer-actions {
-      margin-bottom: 16px;
-    }
-
-    .footer-actions .row {
-      margin-top: 6px;
-    }
-
-    .footer-actions button {
-      padding: 6px 10px;
-      font-size: 0.9em;
-    }
-
-    .config-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .config-group {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      border: 1px solid var(--vscode-panel-border);
-      border-radius: 6px;
-      padding: 10px;
-    }
-
-    .config-group-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-
-    .config-group-title {
-      font-weight: 600;
-      color: var(--vscode-foreground);
-    }
-
-    .config-group-header .config-group-title {
-      flex: 1;
-    }
-
-    .config-group-actions button {
-      width: auto;
-      padding: 4px 8px;
-      font-size: 0.85em;
-    }
-
-    .config-group-error {
-      color: var(--vscode-errorForeground);
-    }
-
-    .config-item {
-      border: 1px solid var(--vscode-widget-border);
-      border-radius: 4px;
-      padding: 10px;
-      background-color: var(--vscode-editor-background);
-    }
-
-    .config-item button {
-      width: 100%;
-      text-align: left;
-    }
-
-    .config-item pre {
-      margin-top: 8px;
-      white-space: pre-wrap;
-      font-family: var(--vscode-editor-font-family);
-      font-size: 0.9em;
-      color: var(--vscode-descriptionForeground);
-    }
-
-    .current-branch-display {
-      font-family: var(--vscode-editor-font-family);
-      background-color: var(--vscode-textBlockQuote-background);
-      padding: 8px;
-      border-left: 3px solid var(--vscode-textBlockQuote-border);
-      margin-top: 4px;
-    }
-
-    .status {
-      margin-top: 16px;
-      padding: 10px;
-      border-radius: 3px;
-    }
-
-    .status:empty {
-      display: none;
-    }
-
-    .section {
-      margin-top: 20px;
-      padding-top: 16px;
-      border-top: 1px solid var(--vscode-panel-border);
-      animation: fadeIn 0.3s ease-in-out;
-    }
-
-    .section-title {
-      font-weight: 600;
-      margin-bottom: 10px;
-      display: block;
-      font-size: 1.1em;
-    }
-
-    .result-content, .conflict-content {
-      background-color: var(--vscode-editor-background);
-      border: 1px solid var(--vscode-widget-border);
-      padding: 12px;
-      border-radius: 4px;
-      margin-bottom: 12px;
-    }
-
-    pre {
-      margin: 0;
-      white-space: pre-wrap;
-      font-family: var(--vscode-editor-font-family);
-      font-size: 0.9em;
-    }
-
-    ul {
-      margin: 8px 0 0 20px;
-      padding: 0;
-    }
-
-    li {
-      margin-bottom: 4px;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(5px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-  </style>
-</head>
-<body>
-  <div class="footer-actions">
-    <div class="row" id="refreshRow">
-      <button id="refreshBtn" class="secondary">刷新配置</button>
-    </div>
-    <div class="row" id="createConfigRow" hidden>
-      <button id="createConfigBtn" class="secondary">创建配置文件</button>
-    </div>
-  </div>
-
-  <div class="field">
-    <div class="config-list" id="configList"></div>
-  </div>
-
-  <div class="status" id="status"></div>
-
-  <div class="section" id="resultSection" hidden>
-    <span class="section-title">合并结果</span>
-    <div class="result-content" id="resultContent"></div>
-  </div>
-
-  <div class="section" id="conflictSection" hidden>
-    <span class="section-title">⚠️ 发现冲突</span>
-    <div class="conflict-content" id="conflictContent"></div>
-    <div class="row">
-      <button id="openConflictFiles" class="secondary">查看冲突文件</button>
-      <button id="openMergeEditor" class="secondary">打开合并编辑器</button>
-    </div>
-    <div class="row">
-      <button id="checkoutOriginal" class="secondary">放弃合并 (回到原分支)</button>
-      <button id="stayOnTarget">保留当前状态 (解决冲突)</button>
-    </div>
-  </div>
-
-
-  <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
-    const configListEl = document.getElementById('configList');
-    const statusEl = document.getElementById('status');
-    const resultSection = document.getElementById('resultSection');
-    const resultContent = document.getElementById('resultContent');
-    const conflictSection = document.getElementById('conflictSection');
-    const conflictContent = document.getElementById('conflictContent');
-    const refreshRow = document.getElementById('refreshRow');
-    const refreshBtn = document.getElementById('refreshBtn');
-    const createConfigRow = document.getElementById('createConfigRow');
-    const createConfigBtn = document.getElementById('createConfigBtn');
-
-    function setStatus(text, type = 'info') {
-      statusEl.textContent = text || '';
-      statusEl.className = 'status'; // reset
-      if (text) {
-        statusEl.classList.add(type);
-        if (type === 'error') {
-            statusEl.style.backgroundColor = 'var(--vscode-inputValidation-errorBackground)';
-            statusEl.style.border = '1px solid var(--vscode-inputValidation-errorBorder)';
-        } else if (type === 'success') {
-            // No strict standard var for success bg, use block quote or diff insert
-            statusEl.style.backgroundColor = 'var(--vscode-diffEditor-insertedTextBackground)';
-            statusEl.style.border = '1px solid transparent';
-        } else {
-            statusEl.style.backgroundColor = 'var(--vscode-textBlockQuote-background)';
-            statusEl.style.border = 'none';
-        }
-      } else {
-          statusEl.style.backgroundColor = 'transparent';
-          statusEl.style.border = 'none';
-      }
-    }
-
-    function setBusy(isBusy) {
-      refreshBtn.disabled = isBusy;
-      createConfigBtn.disabled = isBusy;
-      const configButtons = configListEl.querySelectorAll('button');
-      configButtons.forEach((button) => {
-        button.disabled = isBusy;
-      });
-    }
-
-    function appendConfigItems(container, items, repoRoot) {
-      for (const item of items) {
-        const itemEl = document.createElement('div');
-        itemEl.className = 'config-item';
-        const btn = document.createElement('button');
-        btn.textContent = item.label || '执行合并';
-        btn.addEventListener('click', () => {
-          setBusy(true);
-          setStatus('正在执行合并...', 'info');
-          const payload = { type: 'merge', profileKey: item.key };
-          if (repoRoot) {
-            payload.repoRoot = repoRoot;
-          }
-          vscode.postMessage(payload);
-        });
-        itemEl.appendChild(btn);
-        const summary = Array.isArray(item.summary) ? item.summary : [];
-        if (summary.length > 0) {
-          const pre = document.createElement('pre');
-          pre.textContent = summary.join('\\n');
-          itemEl.appendChild(pre);
-        }
-        container.appendChild(itemEl);
-      }
-    }
-
-    function shouldShowCreateConfig(groups) {
-      if (!Array.isArray(groups) || groups.length === 0) {
-        return false;
-      }
-      return groups.some((group) => group && group.missingConfig);
-    }
-
-    function updateActionButtons(showCreate) {
-      refreshRow.hidden = showCreate;
-      createConfigRow.hidden = !showCreate;
-    }
-
-    function renderState(data) {
-      const groups = Array.isArray(data.configGroups) ? data.configGroups : [];
-      const items = Array.isArray(data.configSummary) ? data.configSummary : [];
-      const error = data.configError || '';
-      const uiLabels = data.uiLabels || {};
-      const configLoaded = Boolean(data.configLoaded);
-      const hasMissingConfig = typeof data.hasMissingConfig === 'boolean'
-        ? data.hasMissingConfig
-        : shouldShowCreateConfig(groups);
-      refreshBtn.textContent = uiLabels.refreshLabel || '刷新配置';
-      configListEl.innerHTML = '';
-      const showCreate = configLoaded && hasMissingConfig;
-      updateActionButtons(showCreate);
-      if (error) {
-        const errorEl = document.createElement('div');
-        errorEl.textContent = '配置错误: ' + error;
-        configListEl.appendChild(errorEl);
-        return;
-      }
-      if (!configLoaded) {
-        const hintEl = document.createElement('div');
-        hintEl.textContent = '请点击“刷新配置”读取配置。';
-        configListEl.appendChild(hintEl);
-        return;
-      }
-      if (groups.length === 1) {
-        const group = groups[0] || {};
-        if (group.error) {
-          const groupError = document.createElement('div');
-          groupError.textContent = '配置错误: ' + group.error;
-          configListEl.appendChild(groupError);
-          return;
-        }
-        const groupItems = Array.isArray(group.items) ? group.items : [];
-        if (groupItems.length === 0) {
-          const emptyEl = document.createElement('div');
-          emptyEl.textContent = '未找到可用的合并配置。';
-          configListEl.appendChild(emptyEl);
-          return;
-        }
-        appendConfigItems(configListEl, groupItems, group.repoRoot);
-        return;
-      }
-      if (groups.length > 1) {
-        for (const group of groups) {
-          const groupEl = document.createElement('div');
-          groupEl.className = 'config-group';
-          const label = group.repoLabel || group.repoRoot || 'Git 项目';
-          const headerEl = document.createElement('div');
-          headerEl.className = 'config-group-header';
-          const titleEl = document.createElement('div');
-          titleEl.className = 'config-group-title';
-          titleEl.textContent = label;
-          headerEl.appendChild(titleEl);
-          if (!showCreate && group.repoRoot) {
-            const actionsEl = document.createElement('div');
-            actionsEl.className = 'config-group-actions';
-            const refreshGroupBtn = document.createElement('button');
-            refreshGroupBtn.className = 'secondary';
-            refreshGroupBtn.textContent = uiLabels.refreshLabel || '刷新配置';
-            refreshGroupBtn.addEventListener('click', () => {
-              vscode.postMessage({
-                type: 'refreshRepo',
-                repoRoot: group.repoRoot,
-              });
-            });
-            actionsEl.appendChild(refreshGroupBtn);
-            headerEl.appendChild(actionsEl);
-          }
-          groupEl.appendChild(headerEl);
-          if (group.error) {
-            const groupError = document.createElement('div');
-            groupError.className = 'config-group-error';
-            groupError.textContent = '配置错误: ' + group.error;
-            groupEl.appendChild(groupError);
-          }
-          const groupItems = Array.isArray(group.items) ? group.items : [];
-          if (groupItems.length === 0 && !group.error) {
-            const emptyEl = document.createElement('div');
-            emptyEl.textContent = '未找到可用的合并配置。';
-            groupEl.appendChild(emptyEl);
-          } else {
-            appendConfigItems(groupEl, groupItems, group.repoRoot);
-          }
-          configListEl.appendChild(groupEl);
-        }
-        return;
-      }
-      if (items.length === 0) {
-        const emptyEl = document.createElement('div');
-        emptyEl.textContent = '未找到可用的合并配置。';
-        configListEl.appendChild(emptyEl);
-        return;
-      }
-      appendConfigItems(configListEl, items);
-    }
-
-    function renderResult(result) {
-      if (result.status === 'success') {
-        resultSection.hidden = false;
-        conflictSection.hidden = true;
-        
-        let html = '';
-        html += '<p><strong>✅ 合并成功</strong></p>';
-        html += '<p>目标分支: ' + result.targetBranch + '</p>';
-        html += '<p>Head Commit: ' + result.headCommit + (result.isMergeCommit ? ' (Merge Commit)' : '') + '</p>';
-        html += '<p>耗时: ' + Math.round(result.durationMs) + ' ms</p>';
-        
-        if (result.checkoutBack === 'failed') {
-          html += '<p style="color: var(--vscode-errorForeground)">⚠️ 回到原分支失败: ' + (result.checkoutError || '') + '</p>';
-        } else {
-           html += '<p>↩️ 已切回原分支: ' + result.currentBranch + '</p>';
-        }
-
-        if (result.pushStatus === 'ok') {
-          html += '<p>🚀 已推送到远端: ' + result.pushRemote + '</p>';
-        } else if (result.pushStatus === 'failed') {
-          html += '<p style="color: var(--vscode-errorForeground)">推送失败: ' + (result.pushError || '') + '</p>';
-        }
-
-        if (result.jenkinsStatus === 'ok') {
-          html += '<p>🔔 Jenkins 已触发: ' + (result.jenkinsJob || '') + '</p>';
-        } else if (result.jenkinsStatus === 'failed') {
-          html += '<p style="color: var(--vscode-errorForeground)">Jenkins 触发失败: ' + (result.jenkinsError || '') + '</p>';
-        }
-
-        if (Array.isArray(result.files) && result.files.length > 0) {
-          html += '<div style="margin-top:8px;"><strong>变更文件:</strong></div><ul>';
-          for (const file of result.files) {
-            html += '<li>' + file + '</li>';
-          }
-          html += '</ul>';
-        }
-
-        resultContent.innerHTML = html;
-        const pushState = result.pushStatus === 'ok'
-          ? '成功'
-          : result.pushStatus === 'failed'
-            ? '失败'
-            : '跳过';
-        const jenkinsState = result.jenkinsStatus === 'ok'
-          ? '成功'
-          : result.jenkinsStatus === 'failed'
-            ? '失败'
-            : '跳过';
-        const checkoutState = result.checkoutBack === 'ok' ? '成功' : '失败';
-        const hasFailure =
-          result.checkoutBack === 'failed' ||
-          result.pushStatus === 'failed' ||
-          result.jenkinsStatus === 'failed';
-        const statusText =
-          '合并: 成功 | 推送: ' +
-          pushState +
-          ' | Jenkins: ' +
-          jenkinsState +
-          ' | 切回: ' +
-          checkoutState;
-        const statusType = hasFailure ? 'error' : 'success';
-        setStatus(statusText, statusType);
-      }
-      if (result.status === 'failed') {
-        resultSection.hidden = true;
-        conflictSection.hidden = false;
-        
-        let html = '';
-        html += '<p>目标分支: ' + result.targetBranch + '</p>';
-        html += '<p style="color: var(--vscode-errorForeground)">错误: ' + result.errorMessage + '</p>';
-        
-        conflictContent.innerHTML = html;
-
-        if (Array.isArray(result.conflicts) && result.conflicts.length > 0) {
-            let conflictHtml = '<div style="margin-top:8px;"><strong>冲突文件:</strong></div><ul>';
-            for (const file of result.conflicts) {
-                conflictHtml += '<li>' + file + '</li>';
-            }
-            conflictHtml += '</ul>';
-            conflictContent.innerHTML += conflictHtml;
-        }
-        
-        setStatus('合并: 失败 | 推送: 未执行 | Jenkins: 未执行 | 切回: 未执行', 'error');
-      }
-    }
-
-    refreshBtn.addEventListener('click', () => {
-      vscode.postMessage({ type: 'requestState', loadConfig: true });
-    });
-
-    createConfigBtn.addEventListener('click', () => {
-      vscode.postMessage({ type: 'openConfig' });
-    });
-
-    document.getElementById('openConflictFiles').addEventListener('click', () => {
-      vscode.postMessage({ type: 'openConflictFiles' });
-    });
-
-    document.getElementById('openMergeEditor').addEventListener('click', () => {
-      vscode.postMessage({ type: 'openMergeEditor' });
-    });
-
-    document.getElementById('checkoutOriginal').addEventListener('click', () => {
-      vscode.postMessage({ type: 'checkoutOriginal' });
-    });
-
-    document.getElementById('stayOnTarget').addEventListener('click', () => {
-      setStatus('已留在目标分支处理冲突。', 'info');
-      conflictSection.hidden = true; // Optionally hide conflict buttons if they decide to stay
-    });
-
-    window.addEventListener('message', (event) => {
-      const message = event.data;
-      if (message.type === 'state') {
-        renderState(message);
-        setBusy(false);
-        return;
-      }
-      if (message.type === 'mergeStarted') {
-        setStatus(message.message || '正在执行合并...', 'info');
-        setBusy(true);
-        return;
-      }
-      if (message.type === 'result') {
-        renderResult(message.result);
-        setBusy(false);
-        return;
-      }
-      if (message.type === 'error') {
-        setStatus(message.message || '发生错误。', 'error');
-        setBusy(false);
-        return;
-      }
-      if (message.type === 'info') {
-        setStatus(message.message || '', 'info');
-        setBusy(false);
-        return;
-      }
-    });
-
-    vscode.postMessage({ type: 'requestState', loadConfig: false });
-  </script>
-</body>
-</html>`;
-    }
 }
 QuickMergeViewProvider.viewType = "quickMergeView";
-async function performMerge(cwd, plan) {
-    const start = Date.now();
-    const currentBranch = plan.currentBranch;
-    const targetBranch = plan.targetBranch;
-    await runGit(["checkout", targetBranch], cwd);
-    const targetBefore = await getHeadCommit(cwd);
-    try {
-        const args = ["merge"];
-        if (plan.strategyFlag) {
-            args.push(plan.strategyFlag);
-        }
-        args.push(plan.sourceBranch);
-        await runGit(args, cwd);
-    }
-    catch (error) {
-        const conflicts = await listConflicts(cwd).catch(() => []);
-        return {
-            status: "failed",
-            currentBranch,
-            targetBranch,
-            errorMessage: getErrorMessage(error),
-            conflicts,
-            durationMs: Date.now() - start,
-        };
-    }
-    const headCommit = await getHeadCommit(cwd);
-    const parentCount = await getCommitParentCount(headCommit, cwd);
-    const files = await listChangedFiles(targetBefore, headCommit, cwd).catch(() => []);
-    let pushStatus = "skipped";
-    let pushError;
-    if (plan.pushAfterMerge && plan.pushRemote) {
-        try {
-            await runGit(["push", plan.pushRemote, targetBranch], cwd);
-            pushStatus = "ok";
-        }
-        catch (error) {
-            pushStatus = "failed";
-            pushError = getErrorMessage(error);
-        }
-    }
-    let jenkinsStatus = "skipped";
-    let jenkinsError;
-    let jenkinsJob;
-    if (plan.jenkins) {
-        jenkinsJob = plan.jenkins.job;
-        try {
-            await triggerJenkinsBuild(plan.jenkins, {
-                sourceBranch: plan.sourceBranch,
-                targetBranch,
-                currentBranch,
-                mergeCommit: headCommit,
-                strategy: plan.strategyLabel,
-                pushRemote: plan.pushRemote || "",
-            });
-            jenkinsStatus = "ok";
-        }
-        catch (error) {
-            jenkinsStatus = "failed";
-            jenkinsError = getErrorMessage(error);
-        }
-    }
-    let checkoutBack = "ok";
-    let checkoutError;
-    try {
-        await runGit(["checkout", currentBranch], cwd);
-    }
-    catch (error) {
-        checkoutBack = "failed";
-        checkoutError = getErrorMessage(error);
-    }
-    return {
-        status: "success",
-        currentBranch,
-        targetBranch,
-        headCommit,
-        isMergeCommit: parentCount > 1,
-        files,
-        durationMs: Date.now() - start,
-        checkoutBack,
-        checkoutError,
-        pushStatus,
-        pushRemote: plan.pushAfterMerge ? plan.pushRemote || undefined : undefined,
-        pushError,
-        jenkinsStatus,
-        jenkinsJob,
-        jenkinsError,
-    };
-}
-async function loadMergePlan(cwd, profileKey) {
-    const [currentBranch, remotes] = await Promise.all([
-        getCurrentBranch(cwd),
-        listRemotes(cwd),
-    ]);
-    if (!currentBranch) {
-        throw new Error("无法获取当前分支。");
-    }
-    const configFile = await readMergeConfig(cwd);
-    const { profiles } = normalizeConfigFile(configFile);
-    const profile = selectProfile(profiles, profileKey);
-    return resolveMergePlan(profile, currentBranch, remotes);
-}
-async function getConfigGroups(repoRoots) {
-    if (repoRoots.length === 0) {
-        return {
-            groups: [],
-            error: "未找到 Git 仓库。",
-            uiLabels: DEFAULT_UI_LABELS,
-        };
-    }
-    const results = await Promise.all(repoRoots.map((repoRoot) => getConfigGroup(repoRoot)));
-    const groups = results.map((result) => result.group);
-    let uiLabels = DEFAULT_UI_LABELS;
-    if (repoRoots.length === 1) {
-        for (const result of results) {
-            if (!result.group.error) {
-                uiLabels = result.uiLabels;
-                break;
-            }
-        }
-    }
-    return { groups, error: "", uiLabels };
-}
-async function getConfigGroup(repoRoot) {
-    const repoLabel = formatRepoLabel(repoRoot);
-    const configPath = path.join(repoRoot, CONFIG_FILE_NAME);
-    const hasConfig = await pathExists(configPath);
-    if (!hasConfig) {
-        return {
-            group: {
-                repoRoot,
-                repoLabel,
-                items: [],
-                error: `未找到配置文件 ${CONFIG_FILE_NAME}。`,
-                missingConfig: true,
-            },
-            uiLabels: DEFAULT_UI_LABELS,
-        };
-    }
-    try {
-        const [currentBranch, remotes] = await Promise.all([
-            getCurrentBranch(repoRoot),
-            listRemotes(repoRoot),
-        ]);
-        const configFile = await readMergeConfig(repoRoot);
-        const normalized = normalizeConfigFile(configFile);
-        const items = normalized.profiles.map((profile, index) => {
-            const key = getProfileKey(profile, index);
-            const label = getProfileLabel(profile, index);
-            try {
-                const plan = resolveMergePlan(profile, currentBranch, remotes);
-                return {
-                    key,
-                    label: planLabel(label, plan),
-                    summary: buildConfigSummary(plan),
-                };
-            }
-            catch (error) {
-                return {
-                    key,
-                    label,
-                    summary: [`配置错误: ${getErrorMessage(error)}`],
-                };
-            }
-        });
-        return {
-            group: {
-                repoRoot,
-                repoLabel,
-                items,
-                missingConfig: false,
-            },
-            uiLabels: normalized.uiLabels,
-        };
-    }
-    catch (error) {
-        return {
-            group: {
-                repoRoot,
-                repoLabel,
-                items: [],
-                error: getErrorMessage(error),
-                missingConfig: false,
-            },
-            uiLabels: DEFAULT_UI_LABELS,
-        };
-    }
-}
-async function readMergeConfig(cwd) {
-    const configUri = vscode.Uri.file(path.join(cwd, CONFIG_FILE_NAME));
-    let content;
-    try {
-        content = await vscode.workspace.fs.readFile(configUri);
-    }
-    catch {
-        throw new Error(`未找到配置文件 ${CONFIG_FILE_NAME}。`);
-    }
-    try {
-        const parsed = JSON.parse(Buffer.from(content).toString("utf8"));
-        if (!parsed || typeof parsed !== "object") {
-            throw new Error("配置内容必须是 JSON 对象。");
-        }
-        return parsed;
-    }
-    catch (error) {
-        throw new Error(`配置文件 ${CONFIG_FILE_NAME} 解析失败。`);
-    }
-}
-function resolveMergePlan(config, currentBranch, remotes) {
-    const targetBranch = (config.targetBranch ?? "").trim();
-    if (!targetBranch) {
-        throw new Error("配置缺少 targetBranch。");
-    }
-    const sourceBranch = (config.sourceBranch ?? "").trim() || currentBranch;
-    if (!sourceBranch) {
-        throw new Error("无法确定源分支。");
-    }
-    if (sourceBranch === targetBranch) {
-        throw new Error("源分支和目标分支不能相同。");
-    }
-    const strategyInfo = normalizeStrategy(config.strategy);
-    const pushAfterMerge = config.pushAfterMerge !== false;
-    let pushRemote = null;
-    if (pushAfterMerge) {
-        const desiredRemote = (config.pushRemote ?? "").trim();
-        const defaultRemote = getDefaultRemote(remotes);
-        if (desiredRemote) {
-            if (remotes.length > 0 && !remotes.includes(desiredRemote)) {
-                throw new Error(`远端 ${desiredRemote} 不存在。`);
-            }
-            pushRemote = desiredRemote;
-        }
-        else {
-            pushRemote = defaultRemote;
-        }
-        if (!pushRemote) {
-            throw new Error("未找到可用远端，无法推送。");
-        }
-    }
-    let jenkins;
-    if (config.jenkins && config.jenkins.enabled !== false) {
-        if (!config.jenkins.url || !config.jenkins.job) {
-            throw new Error("Jenkins 配置缺少 url 或 job。");
-        }
-        jenkins = config.jenkins;
-    }
-    return {
-        currentBranch,
-        sourceBranch,
-        targetBranch,
-        strategyFlag: strategyInfo.flag,
-        strategyLabel: strategyInfo.label,
-        pushAfterMerge,
-        pushRemote,
-        jenkins,
-    };
-}
-function normalizeConfigFile(configFile) {
-    const uiLabels = normalizeUiLabels(configFile.ui ?? configFile.buttons);
-    if (!Array.isArray(configFile.profiles) || configFile.profiles.length === 0) {
-        throw new Error("配置文件必须包含 profiles。");
-    }
-    const profiles = configFile.profiles;
-    return { uiLabels, profiles };
-}
-function normalizeUiLabels(input) {
-    return {
-        refreshLabel: input?.refreshLabel || DEFAULT_UI_LABELS.refreshLabel,
-        openConfigLabel: input?.openConfigLabel || DEFAULT_UI_LABELS.openConfigLabel,
-    };
-}
-function selectProfile(profiles, profileKey) {
-    if (profiles.length === 0) {
-        throw new Error("没有可用的合并配置。");
-    }
-    if (!profileKey) {
-        if (profiles.length === 1) {
-            return profiles[0];
-        }
-        throw new Error("未指定合并配置。");
-    }
-    const byId = profiles.find((profile) => profile.id?.trim() === profileKey);
-    if (byId) {
-        return byId;
-    }
-    const index = Number(profileKey);
-    if (Number.isInteger(index) && index >= 0 && index < profiles.length) {
-        return profiles[index];
-    }
-    throw new Error("未找到匹配的合并配置。");
-}
-function getProfileKey(profile, index) {
-    const id = (profile.id ?? "").trim();
-    if (id) {
-        return id;
-    }
-    return String(index);
-}
-function getProfileLabel(profile, index) {
-    const label = (profile.label ?? "").trim();
-    if (label) {
-        return label;
-    }
-    const id = (profile.id ?? "").trim();
-    if (id) {
-        return id;
-    }
-    return `合并配置 ${index + 1}`;
-}
-function planLabel(label, plan) {
-    if (label) {
-        return label;
-    }
-    return `${plan.sourceBranch} -> ${plan.targetBranch}`;
-}
-function normalizeStrategy(value) {
-    const normalized = (value ?? "").trim();
-    if (!normalized || normalized === "merge" || normalized === "default") {
-        return { flag: "", label: "default" };
-    }
-    if (normalized === "--no-ff" || normalized === "no-ff" || normalized === "no_ff") {
-        return { flag: "--no-ff", label: "--no-ff" };
-    }
-    if (normalized === "--ff-only" ||
-        normalized === "ff-only" ||
-        normalized === "ff_only") {
-        return { flag: "--ff-only", label: "--ff-only" };
-    }
-    throw new Error("合并策略无效。");
-}
-function buildConfigSummary(plan) {
-    const lines = [
-        `源分支: ${plan.sourceBranch}`,
-        `目标分支: ${plan.targetBranch}`,
-        `合并策略: ${plan.strategyLabel}`,
-        `推送远端: ${plan.pushAfterMerge ? plan.pushRemote ?? "-" : "不推送"}`,
-    ];
-    if (plan.jenkins) {
-        lines.push(`Jenkins: ${plan.jenkins.job}`);
-    }
-    else {
-        lines.push("Jenkins: 未启用");
-    }
-    return lines;
-}
-function getDefaultConfigTemplate() {
-    return {
-        ui: {
-            refreshLabel: "刷新配置",
-            openConfigLabel: "打开配置文件",
-        },
-        profiles: [
-            {
-                id: "merge-main",
-                label: "合并到 main",
-                sourceBranch: "",
-                targetBranch: "main",
-                strategy: "default",
-                pushAfterMerge: true,
-                pushRemote: "origin",
-                jenkins: {
-                    enabled: false,
-                    url: "https://jenkins.example.com",
-                    job: "folder/jobName",
-                    token: "",
-                    user: "",
-                    apiToken: "",
-                    crumb: true,
-                    parameters: {
-                        SOURCE_BRANCH: "${sourceBranch}",
-                        TARGET_BRANCH: "${targetBranch}",
-                        MERGE_COMMIT: "${mergeCommit}",
-                    },
-                },
-            },
-            {
-                id: "merge-release",
-                label: "合并到 release",
-                sourceBranch: "",
-                targetBranch: "release",
-                strategy: "no-ff",
-                pushAfterMerge: true,
-                pushRemote: "origin"
-            }
-        ]
-    };
-}
-function getDefaultRemote(remotes) {
-    if (remotes.includes("origin")) {
-        return "origin";
-    }
-    return remotes[0] ?? null;
-}
-async function triggerJenkinsBuild(config, context) {
-    const baseUrl = config.url.replace(/\/+$/, "");
-    const jobPath = getJenkinsJobPath(config.job);
-    const params = buildJenkinsParams(config.parameters, context);
-    const hasParams = Object.keys(params).length > 0;
-    const endpoint = hasParams ? "buildWithParameters" : "build";
-    const url = new URL(`${baseUrl}${jobPath}/${endpoint}`);
-    if (config.token) {
-        url.searchParams.append("token", config.token);
-    }
-    for (const [key, value] of Object.entries(params)) {
-        url.searchParams.append(key, value);
-    }
-    const headers = {};
-    if (config.user && config.apiToken) {
-        const token = Buffer.from(`${config.user}:${config.apiToken}`).toString("base64");
-        headers.Authorization = `Basic ${token}`;
-    }
-    if (config.crumb) {
-        const crumb = await getJenkinsCrumb(baseUrl, headers);
-        headers[crumb.field] = crumb.value;
-    }
-    const response = await httpRequest(url.toString(), {
-        method: "POST",
-        headers,
-    });
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw new Error(`Jenkins 触发失败 (${response.statusCode}) ${response.body}`.trim());
-    }
-}
-async function getJenkinsCrumb(baseUrl, headers) {
-    const url = new URL(`${baseUrl}/crumbIssuer/api/json`);
-    const response = await httpRequest(url.toString(), {
-        method: "GET",
-        headers,
-    });
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw new Error(`获取 Jenkins Crumb 失败 (${response.statusCode})`);
-    }
-    const data = JSON.parse(response.body || "{}");
-    if (!data.crumbRequestField || !data.crumb) {
-        throw new Error("Jenkins Crumb 返回数据无效。");
-    }
-    return { field: data.crumbRequestField, value: data.crumb };
-}
-function getJenkinsJobPath(job) {
-    const segments = job.split("/").map((part) => part.trim()).filter(Boolean);
-    if (segments.length === 0) {
-        throw new Error("Jenkins job 不能为空。");
-    }
-    return `/job/${segments.map(encodeURIComponent).join("/job/")}`;
-}
-function buildJenkinsParams(parameters, context) {
-    const result = {};
-    if (!parameters) {
-        return result;
-    }
-    for (const [key, value] of Object.entries(parameters)) {
-        result[key] = interpolateTemplate(String(value), context);
-    }
-    return result;
-}
-function interpolateTemplate(input, context) {
-    return input.replace(/\\$\\{(\\w+)\\}/g, (_, key) => context[key] ?? "");
-}
-async function httpRequest(url, options) {
-    return new Promise((resolve, reject) => {
-        const target = new URL(url);
-        const transport = target.protocol === "https:" ? https : http;
-        const req = transport.request(target, {
-            method: options.method,
-            headers: options.headers,
-        }, (res) => {
-            const chunks = [];
-            res.on("data", (chunk) => chunks.push(chunk));
-            res.on("end", () => {
-                resolve({
-                    statusCode: res.statusCode || 0,
-                    body: Buffer.concat(chunks).toString("utf8"),
-                });
-            });
-        });
-        req.on("error", reject);
-        req.end();
-    });
-}
-async function listBranches(cwd) {
-    const result = await runGit(["branch", "--format=%(refname:short)"], cwd);
-    return result.stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-}
-async function listRemotes(cwd) {
-    const result = await runGit(["remote"], cwd);
-    return result.stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-}
-async function listConflicts(cwd) {
-    const result = await runGit(["diff", "--name-only", "--diff-filter=U"], cwd);
-    return result.stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-}
-async function getCurrentBranch(cwd) {
-    const result = await runGit(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
-    return result.stdout.trim();
-}
-async function getHeadCommit(cwd) {
-    const result = await runGit(["rev-parse", "HEAD"], cwd);
-    return result.stdout.trim();
-}
-async function getCommitParentCount(commit, cwd) {
-    const result = await runGit(["rev-list", "--parents", "-n", "1", commit], cwd);
-    const parts = result.stdout.split(" ").filter(Boolean);
-    return Math.max(0, parts.length - 1);
-}
-async function listChangedFiles(before, after, cwd) {
-    if (!before || !after || before === after) {
-        return [];
-    }
-    const result = await runGit(["diff", "--name-only", `${before}..${after}`], cwd);
-    return result.stdout
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
-}
-async function runGit(args, cwd) {
-    try {
-        const { stdout, stderr } = await execFileAsync("git", args, { cwd });
-        return {
-            stdout: stdout?.toString().trim() ?? "",
-            stderr: stderr?.toString().trim() ?? "",
-        };
-    }
-    catch (error) {
-        const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : "";
-        const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : "";
-        const message = stderr || stdout || error?.message || "Git 命令执行失败。";
-        const err = new Error(message);
-        err.stderr = stderr;
-        err.stdout = stdout;
-        throw err;
-    }
-}
-function getWorkspaceRoot() {
-    const folders = vscode.workspace.workspaceFolders;
-    if (!folders || folders.length === 0) {
-        return null;
-    }
-    if (folders.length === 1) {
-        return folders[0].uri.fsPath;
-    }
-    const activeUri = vscode.window.activeTextEditor?.document?.uri;
-    if (activeUri) {
-        const activeFolder = vscode.workspace.getWorkspaceFolder(activeUri);
-        if (activeFolder) {
-            return activeFolder.uri.fsPath;
-        }
-    }
-    if (lastWorkspaceRoot) {
-        const matched = folders.find((folder) => folder.uri.fsPath === lastWorkspaceRoot);
-        if (matched) {
-            return matched.uri.fsPath;
-        }
-    }
-    return folders[0].uri.fsPath;
-}
-async function resolveRepoRoot() {
-    const workspaceRoot = getWorkspaceRoot();
-    if (!workspaceRoot) {
-        return null;
-    }
-    const candidates = [];
-    const activeUri = vscode.window.activeTextEditor?.document?.uri;
-    if (activeUri?.scheme === "file") {
-        candidates.push(activeUri.fsPath);
-    }
-    if (lastWorkspaceRoot && lastWorkspaceRoot !== workspaceRoot) {
-        candidates.push(lastWorkspaceRoot);
-    }
-    candidates.push(workspaceRoot);
-    for (const candidate of candidates) {
-        const repoRoot = await findGitRoot(candidate);
-        if (repoRoot) {
-            return repoRoot;
-        }
-    }
-    return workspaceRoot;
-}
-async function resolveRepoRoots(fallbackRoot) {
-    const folders = vscode.workspace.workspaceFolders;
-    if (!folders || folders.length === 0) {
-        return [];
-    }
-    const roots = new Set();
-    const maxDepth = 3;
-    for (const folder of folders) {
-        await scanRepoRootsByDepth(folder.uri.fsPath, maxDepth, roots);
-    }
-    if (fallbackRoot) {
-        const repoRoot = await findGitRoot(fallbackRoot);
-        if (repoRoot) {
-            roots.add(repoRoot);
-        }
-    }
-    return Array.from(roots).sort((a, b) => a.localeCompare(b));
-}
-const SCAN_SKIP_DIRS = new Set([
-    "node_modules",
-    "dist",
-    "out",
-    "build",
-    "coverage",
-    ".vscode",
-    ".idea",
-]);
-function shouldSkipScanDir(name) {
-    return SCAN_SKIP_DIRS.has(name);
-}
-async function scanRepoRootsByDepth(root, maxDepth, roots) {
-    async function scanDir(dir, depth) {
-        let entries;
-        try {
-            entries = await fs.promises.readdir(dir, { withFileTypes: true });
-        }
-        catch {
-            return;
-        }
-        for (const entry of entries) {
-            if (entry.name === ".git") {
-                roots.add(dir);
-                continue;
-            }
-            if (entry.name === CONFIG_FILE_NAME &&
-                (entry.isFile() || entry.isSymbolicLink())) {
-                roots.add(dir);
-            }
-        }
-        if (depth >= maxDepth) {
-            return;
-        }
-        const nextDepth = depth + 1;
-        for (const entry of entries) {
-            if (!entry.isDirectory()) {
-                continue;
-            }
-            if (entry.isSymbolicLink()) {
-                continue;
-            }
-            if (entry.name === ".git") {
-                continue;
-            }
-            if (shouldSkipScanDir(entry.name)) {
-                continue;
-            }
-            await scanDir(path.join(dir, entry.name), nextDepth);
-        }
-    }
-    await scanDir(root, 0);
-}
-function formatRepoLabel(repoRoot) {
-    const relative = vscode.workspace.asRelativePath(repoRoot, true);
-    if (!relative || relative === "." || relative === repoRoot) {
-        return path.basename(repoRoot);
-    }
-    return relative;
-}
-async function findGitRoot(startPath) {
-    const startDir = await normalizeStartDirectory(startPath);
-    if (!startDir) {
-        return null;
-    }
-    let current = startDir;
-    while (true) {
-        if (await pathExists(path.join(current, ".git"))) {
-            return current;
-        }
-        const parent = path.dirname(current);
-        if (parent === current) {
-            return null;
-        }
-        current = parent;
-    }
-}
-async function normalizeStartDirectory(startPath) {
-    try {
-        const stat = await vscode.workspace.fs.stat(vscode.Uri.file(startPath));
-        if (stat.type & vscode.FileType.Directory) {
-            return startPath;
-        }
-        return path.dirname(startPath);
-    }
-    catch {
-        return null;
-    }
-}
-async function pathExists(filePath) {
-    try {
-        await vscode.workspace.fs.stat(vscode.Uri.file(filePath));
-        return true;
-    }
-    catch {
-        return false;
-    }
-}
-function getErrorMessage(error) {
-    if (!error) {
-        return "未知错误。";
-    }
-    if (error instanceof Error) {
-        return error.message;
-    }
-    return String(error);
-}
-function getNonce() {
-    let text = "";
-    const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    for (let i = 0; i < 32; i += 1) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
-}
 function setupDevAutoReload(context) {
     if (context.extensionMode !== vscode.ExtensionMode.Development) {
         return;
