@@ -257,9 +257,6 @@ export function getWebviewHtml(webview: vscode.Webview): string {
     <div class="row" id="refreshRow">
       <button id="refreshBtn" class="secondary" title="刷新配置" aria-label="刷新配置">⟳</button>
     </div>
-    <div class="row" id="createConfigRow" hidden>
-      <button id="createConfigBtn" class="secondary">创建配置文件</button>
-    </div>
   </div>
 
   <div class="field">
@@ -295,10 +292,9 @@ export function getWebviewHtml(webview: vscode.Webview): string {
     const resultContent = document.getElementById('resultContent');
     const conflictSection = document.getElementById('conflictSection');
     const conflictContent = document.getElementById('conflictContent');
-    const refreshRow = document.getElementById('refreshRow');
     const refreshBtn = document.getElementById('refreshBtn');
-    const createConfigRow = document.getElementById('createConfigRow');
-    const createConfigBtn = document.getElementById('createConfigBtn');
+    let lastHasMissingConfig = false;
+    let pendingCreateOnLoad = false;
 
     function setStatus(text, type = 'info') {
       statusEl.textContent = text || '';
@@ -324,7 +320,6 @@ export function getWebviewHtml(webview: vscode.Webview): string {
 
     function setBusy(isBusy) {
       refreshBtn.disabled = isBusy;
-      createConfigBtn.disabled = isBusy;
       const configButtons = configListEl.querySelectorAll('button');
       configButtons.forEach((button) => {
         button.disabled = isBusy;
@@ -357,18 +352,6 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       }
     }
 
-    function shouldShowCreateConfig(groups) {
-      if (!Array.isArray(groups) || groups.length === 0) {
-        return false;
-      }
-      return groups.some((group) => group && group.missingConfig);
-    }
-
-    function updateActionButtons(showCreate) {
-      refreshRow.hidden = showCreate;
-      createConfigRow.hidden = !showCreate;
-    }
-
     function renderState(data) {
       const groups = Array.isArray(data.configGroups) ? data.configGroups : [];
       const items = Array.isArray(data.configSummary) ? data.configSummary : [];
@@ -377,6 +360,13 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       const configLoaded = Boolean(data.configLoaded);
       const missingGroups = groups.filter((group) => group && group.missingConfig);
       const hasMissingConfig = missingGroups.length > 0;
+      lastHasMissingConfig = hasMissingConfig;
+      if (pendingCreateOnLoad && configLoaded) {
+        pendingCreateOnLoad = false;
+        if (hasMissingConfig) {
+          vscode.postMessage({ type: 'openConfig' });
+        }
+      }
       const refreshLabel = uiLabels.refreshLabel || '⟳';
       const isIconLabel = refreshLabel === '⟳';
       refreshBtn.textContent = refreshLabel;
@@ -384,8 +374,6 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       refreshBtn.setAttribute('aria-label', isIconLabel ? '刷新配置' : refreshLabel);
       refreshBtn.classList.toggle('icon-button', isIconLabel);
       configListEl.innerHTML = '';
-      const showCreate = configLoaded && hasMissingConfig;
-      updateActionButtons(showCreate);
       if (error) {
         const errorEl = document.createElement('div');
         errorEl.textContent = '配置错误: ' + error;
@@ -394,7 +382,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       }
       if (!configLoaded) {
         const hintEl = document.createElement('div');
-        hintEl.textContent = '请点击刷新图标读取配置。';
+        hintEl.textContent = '请点击刷新图标读取配置，若无配置会自动创建。';
         configListEl.appendChild(hintEl);
         return;
       }
@@ -404,7 +392,8 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         const labels = missingGroups.map(
           (group) => group.repoLabel || group.repoRoot || 'Git 项目'
         );
-        missingEl.textContent = '缺少配置文件的仓库: ' + labels.join('、');
+        missingEl.textContent =
+          '缺少配置文件的仓库: ' + labels.join('、') + '（点击刷新图标创建）';
         configListEl.appendChild(missingEl);
       }
       if (groups.length === 1) {
@@ -436,7 +425,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
           titleEl.className = 'config-group-title';
           titleEl.textContent = label;
           headerEl.appendChild(titleEl);
-          if (!showCreate && group.repoRoot) {
+          if (group.repoRoot) {
             const actionsEl = document.createElement('div');
             actionsEl.className = 'config-group-actions';
             const refreshGroupBtn = document.createElement('button');
@@ -572,11 +561,12 @@ export function getWebviewHtml(webview: vscode.Webview): string {
     }
 
     refreshBtn.addEventListener('click', () => {
+      if (lastHasMissingConfig) {
+        vscode.postMessage({ type: 'openConfig' });
+        return;
+      }
+      pendingCreateOnLoad = true;
       vscode.postMessage({ type: 'requestState', loadConfig: true });
-    });
-
-    createConfigBtn.addEventListener('click', () => {
-      vscode.postMessage({ type: 'openConfig' });
     });
 
     document.getElementById('openConflictFiles').addEventListener('click', () => {

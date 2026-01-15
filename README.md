@@ -15,11 +15,12 @@ Config-driven VSCode merge helper. It reads `.quick-merge.json` from the project
 ## Usage
 
 1. Open the project folder, click the **Quick Merge Jenkins** icon in the sidebar
-2. Click "Open Config" to generate `.quick-merge.json`
-3. Edit the config, then click "Refresh Config" to load profiles
+2. Click the refresh icon to load profiles; if no config exists, it will be created and opened
+3. Edit the config, then click the refresh icon again to reload
 4. Click a profile button to run the merge
 
-> Note: config is only loaded when you click "Refresh Config".
+> Note: refresh is optional; it's only for a more visual/manual update. For performance reasons, dynamic file watching is not enabled.
+> You can also run `Quick Merge Jenkins: Open Config File` from the Command Palette.
 
 ## Config File
 
@@ -30,7 +31,7 @@ Example:
 ```json
 {
   "ui": {
-    "refreshLabel": "Refresh Config",
+    "refreshLabel": "⟳",
     "openConfigLabel": "Open Config"
   },
   "profiles": [
