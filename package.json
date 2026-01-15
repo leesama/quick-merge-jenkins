@@ -13,12 +13,7 @@
     "SCM Providers"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onView:quickMergeView",
-    "onCommand:quick-merge.refresh",
-    "onCommand:quick-merge.openConflictFiles",
-    "onCommand:quick-merge.openMergeEditor",
-    "onCommand:quick-merge.openConfig"
+    "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -62,7 +57,10 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "vscode:prepublish": "npm run compile"
+    "vscode:prepublish": "npm run compile",
+    "release:patch": "npm version patch && vsce publish",
+    "release:minor": "npm version minor && vsce publish",
+    "release:major": "npm version major && vsce publish"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

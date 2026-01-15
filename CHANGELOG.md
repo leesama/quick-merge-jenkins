@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.3
+
+- 新增发布脚本：`release:patch`、`release:minor`、`release:major`
+- 调整刷新功能文案说明
+
 ## 1.0.0
 
 - 初始稳定版发布
