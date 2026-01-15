@@ -58,9 +58,11 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "vscode:prepublish": "npm run compile",
-    "release:patch": "npm version patch && vsce publish",
-    "release:minor": "npm version minor && vsce publish",
-    "release:major": "npm version major && vsce publish"
+    "publish:ovsx": "ovsx publish",
+    "publish:all": "vsce publish && ovsx publish",
+    "release:patch": "npm version patch && npm run publish:all",
+    "release:minor": "npm version minor && npm run publish:all",
+    "release:major": "npm version major && npm run publish:all"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
