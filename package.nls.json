@@ -3,7 +3,6 @@
   "description": "Config-driven merge helper with Jenkins trigger support",
   "viewTitle": "Quick Merge Jenkins",
   "viewName": "Quick Merge Jenkins",
-  "command.refresh": "Quick Merge Jenkins: Refresh Config",
   "command.openConflictFiles": "Quick Merge Jenkins: Open Conflict Files",
   "command.openMergeEditor": "Quick Merge Jenkins: Open Merge Editor",
   "command.openConfig": "Quick Merge Jenkins: Open Config File",

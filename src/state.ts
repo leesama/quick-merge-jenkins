@@ -14,7 +14,6 @@ export interface ExtensionState {
   lastConfigGroups: ConfigGroup[];
   lastConfigError: string;
   lastConfigLoaded: boolean;
-  lastHasMissingConfig: boolean;
   lastDemandMessages: Record<string, string>;
 }
 
@@ -26,6 +25,5 @@ export const state: ExtensionState = {
   lastConfigGroups: [],
   lastConfigError: "",
   lastConfigLoaded: false,
-  lastHasMissingConfig: false,
   lastDemandMessages: {},
 };

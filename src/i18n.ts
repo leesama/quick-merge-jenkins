@@ -4,11 +4,6 @@ type Locale = "zh" | "en";
 
 const MESSAGES = {
   confirm: { zh: "确认", en: "Confirm" },
-  mergeConfirm: { zh: "确认执行合并？", en: "Confirm merge?" },
-  mergeConfirmWithLabel: {
-    zh: "确认执行合并：{label}？",
-    en: "Confirm merge: {label}?",
-  },
   deployTestConfirm: {
     zh: "确认发布到测试环境？",
     en: "Confirm deploy to test?",
@@ -68,73 +63,9 @@ const MESSAGES = {
     zh: "配置文件 {configLabel} 解析失败。",
     en: "Failed to parse config file {configLabel}.",
   },
-  configMustHaveProfiles: {
-    zh: "配置文件必须包含 profiles。",
-    en: "Config must include profiles.",
-  },
-  noMergeProfiles: {
-    zh: "没有可用的合并配置。",
-    en: "No merge profiles available.",
-  },
-  mergeProfileUnspecified: {
-    zh: "未指定合并配置。",
-    en: "Merge profile not specified.",
-  },
-  mergeProfileNotFound: {
-    zh: "未找到匹配的合并配置。",
-    en: "No matching merge profile found.",
-  },
-  mergeProfileLabel: {
-    zh: "合并配置 {index}",
-    en: "Merge profile {index}",
-  },
-  mergeToLabel: {
-    zh: "合并到 {branch}",
-    en: "Merge to {branch}",
-  },
-  mergeStrategyInvalid: { zh: "合并策略无效。", en: "Invalid merge strategy." },
-  summarySourceBranch: {
-    zh: "源分支: {branch}",
-    en: "Source branch: {branch}",
-  },
-  summaryTargetBranch: {
-    zh: "目标分支: {branch}",
-    en: "Target branch: {branch}",
-  },
-  summaryStrategy: {
-    zh: "合并策略: {strategy}",
-    en: "Strategy: {strategy}",
-  },
-  summaryPushRemote: {
-    zh: "推送远端: {remote}",
-    en: "Push remote: {remote}",
-  },
-  summaryNoPush: { zh: "推送远端: 不推送", en: "Push remote: skipped" },
-  summaryJenkinsDisabled: { zh: "Jenkins: 未启用", en: "Jenkins: disabled" },
-  summaryJenkinsJob: { zh: "Jenkins: {job}", en: "Jenkins: {job}" },
   currentBranchMissing: {
     zh: "无法获取当前分支。",
     en: "Unable to get current branch.",
-  },
-  missingTargetBranch: {
-    zh: "配置缺少 targetBranch。",
-    en: "Config missing targetBranch.",
-  },
-  missingSourceBranch: {
-    zh: "无法确定源分支。",
-    en: "Unable to determine source branch.",
-  },
-  sameSourceTarget: {
-    zh: "源分支和目标分支不能相同。",
-    en: "Source and target branches cannot be the same.",
-  },
-  remoteNotFound: {
-    zh: "远端 {remote} 不存在。",
-    en: "Remote {remote} not found.",
-  },
-  noRemote: {
-    zh: "未找到可用远端，无法推送。",
-    en: "No available remote to push.",
   },
   jenkinsMissingConfig: {
     zh: "Jenkins 配置缺少 url 或 job。",
@@ -224,7 +155,6 @@ const MESSAGES = {
     zh: "未找到工作区，请先打开一个包含 Git 仓库的文件夹。",
     en: "No workspace found; open a folder with a Git repository.",
   },
-  mergeStarted: { zh: "正在执行合并...", en: "Merging..." },
   mergeSuccess: {
     zh: "合并成功：{target}",
     en: "Merge succeeded: {target}",
@@ -256,8 +186,8 @@ const MESSAGES = {
     en: "No workspace found; open a project.",
   },
   demandPrefixEmpty: {
-    zh: "需求分支前缀配置为空，请在配置文件中设置。",
-    en: "Demand branch prefixes are empty; configure them in the config file.",
+    zh: "需求类型配置为空，请在配置文件中设置。",
+    en: "Demand types are empty; configure them in the config file.",
   },
   demandTypeFeature: { zh: "新增功能", en: "New feature" },
   demandTypeFix: { zh: "修复问题", en: "Bug fix" },
@@ -315,9 +245,21 @@ const MESSAGES = {
     zh: "成功合并 {count} 个提交。",
     en: "Squashed {count} commits.",
   },
+  rebaseSuccessWithMessage: {
+    zh: "成功合并 {count} 个提交，提交信息：{message}",
+    en: "Squashed {count} commits. Message: {message}",
+  },
   rebaseFailed: {
     zh: "变基失败: {error}",
     en: "Rebase failed: {error}",
+  },
+  pullSkippedNoUpstream: {
+    zh: "当前分支未设置上游，已跳过拉取：{branch}",
+    en: "No upstream set; skipped pull for {branch}.",
+  },
+  pullFailed: {
+    zh: "拉取失败：{error}",
+    en: "Pull failed: {error}",
   },
   commitNoChanges: {
     zh: "没有可提交的变更。",
@@ -328,7 +270,7 @@ const MESSAGES = {
     en: "Empty commit created: {message}",
   },
   commitSuccess: { zh: "已提交：{message}", en: "Committed: {message}" },
-  refreshTitle: { zh: "刷新配置", en: "Refresh config" },
+  createConfigLabel: { zh: "创建基础配置", en: "Create base config" },
   mergeResultTitle: { zh: "合并结果", en: "Merge Result" },
   conflictTitle: { zh: "⚠️ 发现冲突", en: "⚠️ Conflicts detected" },
   openConflictFiles: { zh: "查看冲突文件", en: "Open conflict files" },
@@ -341,28 +283,23 @@ const MESSAGES = {
     zh: "保留当前状态 (解决冲突)",
     en: "Stay on target (resolve conflicts)",
   },
-  mergeDefaultLabel: { zh: "执行合并", en: "Run merge" },
   deployTestLabel: { zh: "发布到测试环境", en: "Deploy to test" },
   demandCreate: { zh: "创建需求分支", en: "Create demand branch" },
   demandCommit: { zh: "提交代码", en: "Commit changes" },
-  rebaseSquash: { zh: "变基合并", en: "Squash commits" },
+  rebaseSquash: { zh: "合并提交", en: "Squash commits" },
   commitAndDeploy: { zh: "提交并发布到测试", en: "Commit & Deploy to test" },
   refreshHint: {
-    zh: "请点击刷新图标读取配置，若无配置会自动创建。",
-    en: "Click refresh to load config; if missing, it will be created.",
+    zh: "正在读取配置...",
+    en: "Loading config...",
   },
   gitProjectLabel: { zh: "Git 项目", en: "Git project" },
   missingConfigHint: {
-    zh: "缺少配置文件的仓库: {labels}（点击刷新图标创建）",
-    en: "Missing config in: {labels} (click refresh to create)",
+    zh: "缺少配置文件的仓库: {labels}（可点击“创建基础配置”）",
+    en: "Missing config in: {labels} (use Create base config)",
   },
   openConfigHint: {
     zh: "双击打开配置",
     en: "Double-click to open config",
-  },
-  noProfilesFound: {
-    zh: "未找到可用的合并配置。",
-    en: "No merge profiles found.",
   },
   mergeSuccessTitle: { zh: "✅ 合并成功", en: "✅ Merge succeeded" },
   mergeCommitSuffix: { zh: " (合并提交)", en: " (Merge Commit)" },
@@ -438,14 +375,13 @@ export function t(key: MessageKey, params?: Record<string, string>): string {
 }
 
 export interface WebviewStrings {
-  refreshTitle: string;
+  createConfigLabel: string;
   mergeResultTitle: string;
   conflictTitle: string;
   openConflictFiles: string;
   openMergeEditor: string;
   checkoutOriginal: string;
   stayOnTarget: string;
-  mergeDefaultLabel: string;
   demandCreate: string;
   demandCommit: string;
   rebaseSquash: string;
@@ -454,7 +390,6 @@ export interface WebviewStrings {
   gitProjectLabel: string;
   missingConfigHint: string;
   openConfigHint: string;
-  noProfilesFound: string;
   mergeSuccessTitle: string;
   mergeCommitSuffix: string;
   targetBranchLabel: string;
@@ -475,7 +410,6 @@ export interface WebviewStrings {
   mergeErrorLabel: string;
   conflictFilesLabel: string;
   stayOnTargetStatus: string;
-  mergeInProgress: string;
   deployTestLabel: string;
   deployTestInProgress: string;
   deployTestMissingConfig: string;
@@ -486,14 +420,13 @@ export interface WebviewStrings {
 
 export function getWebviewStrings(): WebviewStrings {
   return {
-    refreshTitle: t("refreshTitle"),
+    createConfigLabel: t("createConfigLabel"),
     mergeResultTitle: t("mergeResultTitle"),
     conflictTitle: t("conflictTitle"),
     openConflictFiles: t("openConflictFiles"),
     openMergeEditor: t("openMergeEditor"),
     checkoutOriginal: t("checkoutOriginal"),
     stayOnTarget: t("stayOnTarget"),
-    mergeDefaultLabel: t("mergeDefaultLabel"),
     deployTestLabel: t("deployTestLabel"),
     demandCreate: t("demandCreate"),
     demandCommit: t("demandCommit"),
@@ -503,7 +436,6 @@ export function getWebviewStrings(): WebviewStrings {
     gitProjectLabel: t("gitProjectLabel"),
     missingConfigHint: t("missingConfigHint"),
     openConfigHint: t("openConfigHint"),
-    noProfilesFound: t("noProfilesFound"),
     mergeSuccessTitle: t("mergeSuccessTitle"),
     mergeCommitSuffix: t("mergeCommitSuffix"),
     targetBranchLabel: t("targetBranchLabel"),
@@ -524,7 +456,6 @@ export function getWebviewStrings(): WebviewStrings {
     mergeErrorLabel: t("mergeErrorLabel"),
     conflictFilesLabel: t("conflictFilesLabel"),
     stayOnTargetStatus: t("stayOnTargetStatus"),
-    mergeInProgress: t("mergeStarted"),
     deployTestInProgress: t("deployTestStarted"),
     deployTestMissingConfig: t("deployTestMissingConfig"),
     genericError: t("genericError"),

@@ -37,10 +37,6 @@
     },
     "commands": [
       {
-        "command": "quick-merge-jenkins.refresh",
-        "title": "%command.refresh%"
-      },
-      {
         "command": "quick-merge-jenkins.openConflictFiles",
         "title": "%command.openConflictFiles%"
       },

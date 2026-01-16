@@ -29,23 +29,9 @@ export interface MergeFailure {
   durationMs: number;
 }
 
-export interface MergeConfig {
-  sourceBranch?: string;
-  targetBranch?: string;
-  strategy?: string;
-  pushAfterMerge?: boolean;
-  pushRemote?: string;
-  jenkins?: JenkinsConfig;
-}
-
 export interface MergeConfigFile {
   demandBranch?: DemandBranchConfig;
   deployToTest?: DeployConfig;
-  profiles?: MergeProfile[];
-}
-
-export interface MergeProfile extends MergeConfig {
-  id?: string;
 }
 
 export interface JenkinsConfig {
@@ -75,16 +61,9 @@ export interface ResolvedMergePlan {
   jenkins?: JenkinsConfig;
 }
 
-export interface ConfigSummaryItem {
-  key: string;
-  label: string;
-  summary: string[];
-}
-
 export interface ConfigGroup {
   repoRoot: string;
   repoLabel: string;
-  items: ConfigSummaryItem[];
   error?: string;
   missingConfig?: boolean;
   deployToTest?: DeployButtonInfo;
@@ -96,10 +75,17 @@ export interface DeployButtonInfo {
   error?: string;
 }
 
+export interface DemandBranchType {
+  prefix: string;
+  commitPrefix?: string;
+}
+
 export interface DemandBranchConfig {
+  types?: DemandBranchType[];
   prefixes?: string[];
   releasePrefix?: string;
   deepseekApiKey?: string;
   deepseekBaseUrl?: string;
   deepseekModel?: string;
+  commitPrefixes?: Record<string, string>;
 }

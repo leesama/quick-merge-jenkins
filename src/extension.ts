@@ -5,7 +5,7 @@ import {
   getDefaultConfigTemplate,
   readMergeConfig,
 } from "./config";
-import { getConfigGroup, getConfigGroups } from "./config-groups";
+import { getConfigGroups } from "./config-groups";
 import {
   getCurrentBranch,
   getHeadCommit,
@@ -16,7 +16,7 @@ import {
 } from "./git";
 import { getLocale, t } from "./i18n";
 import { triggerJenkinsBuild } from "./jenkins";
-import { loadMergePlan, performMerge } from "./merge";
+import { performMerge } from "./merge";
 import { getWorkspaceRoot, resolveRepoRoot, resolveRepoRoots } from "./repo";
 import { state } from "./state";
 import { MergeConfigFile, ResolvedMergePlan } from "./types";
@@ -32,9 +32,6 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.registerWebviewViewProvider(
       QuickMergeViewProvider.viewType,
       provider
-    ),
-    vscode.commands.registerCommand("quick-merge-jenkins.refresh", () =>
-      provider.refresh()
     ),
     vscode.commands.registerCommand(
       "quick-merge-jenkins.openConflictFiles",
@@ -66,20 +63,6 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       if (message?.type === "requestState") {
         const loadConfig = Boolean(message?.loadConfig);
         await this.postState({ loadConfig });
-        return;
-      }
-      if (message?.type === "refreshRepo") {
-        const repoRoot =
-          typeof message?.repoRoot === "string" ? message.repoRoot : "";
-        await this.postState({ loadConfig: true, repoRoot });
-        return;
-      }
-      if (message?.type === "merge") {
-        await this.handleMerge(message);
-        return;
-      }
-      if (message?.type === "confirmMerge") {
-        await this.confirmMerge(message);
         return;
       }
       if (message?.type === "deployTest") {
@@ -139,10 +122,6 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       }
     });
     void this.postState({ loadConfig: !state.lastConfigLoaded });
-  }
-
-  refresh(): void {
-    void this.postState({ loadConfig: true });
   }
 
   async openConflictFiles(): Promise<void> {
@@ -283,93 +262,6 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async handleMerge(message: any): Promise<void> {
-    const requestedRoot =
-      typeof message?.repoRoot === "string" ? message.repoRoot : undefined;
-    const cwd = requestedRoot ?? (await resolveRepoRoot());
-    if (!cwd) {
-      this.postMessage({
-        type: "error",
-        message: t("workspaceMissingForMerge"),
-      });
-      return;
-    }
-    state.lastWorkspaceRoot = cwd;
-
-    this.postMessage({
-      type: "mergeStarted",
-      message: t("mergeStarted"),
-    });
-
-    try {
-      const profileKey =
-        typeof message?.profileKey === "string"
-          ? message.profileKey
-          : undefined;
-      const plan = await loadMergePlan(cwd, profileKey);
-      const result = await performMerge(cwd, plan);
-      if (result.status === "failed") {
-        state.lastFailureContext = {
-          originalBranch: result.currentBranch,
-          targetBranch: result.targetBranch,
-          cwd,
-        };
-        state.lastConflictFiles = result.conflicts;
-      } else {
-        state.lastFailureContext = null;
-        state.lastConflictFiles = [];
-      }
-      this.postMessage({
-        type: "result",
-        result,
-      });
-      if (result.status === "success") {
-        const hasFailure =
-          result.checkoutBack === "failed" ||
-          result.pushStatus === "failed" ||
-          result.jenkinsStatus === "failed";
-        const message = hasFailure
-          ? t("mergeCompletedWithFailures", { target: result.targetBranch })
-          : t("mergeSuccess", { target: result.targetBranch });
-        if (hasFailure) {
-          void vscode.window.showWarningMessage(message);
-        } else {
-          void vscode.window.showInformationMessage(message);
-        }
-      } else {
-        void vscode.window.showErrorMessage(
-          t("mergeFailed", { error: result.errorMessage })
-        );
-      }
-      await this.postState({ loadConfig: false });
-    } catch (error) {
-      void vscode.window.showErrorMessage(
-        t("mergeFailed", { error: getErrorMessage(error) })
-      );
-      this.postMessage({
-        type: "error",
-        message: getErrorMessage(error),
-      });
-    }
-  }
-
-  private async confirmMerge(message: any): Promise<void> {
-    const label =
-      typeof message?.label === "string" ? message.label.trim() : "";
-    const prompt = label
-      ? t("mergeConfirmWithLabel", { label })
-      : t("mergeConfirm");
-    const choice = await vscode.window.showInformationMessage(
-      prompt,
-      { modal: true },
-      t("confirm")
-    );
-    if (choice !== t("confirm")) {
-      return;
-    }
-    await this.handleMerge(message);
-  }
-
   private async confirmDeployTest(message: any): Promise<void> {
     const label =
       typeof message?.label === "string" ? message.label.trim() : "";
@@ -501,80 +393,48 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
 
   private async postState(options?: {
     loadConfig?: boolean;
-    repoRoot?: string;
   }): Promise<void> {
     const activeRepoRoot = await resolveRepoRoot();
     const loadConfig = options?.loadConfig ?? false;
-    const refreshRepoRoot =
-      typeof options?.repoRoot === "string" ? options.repoRoot : "";
     if (!activeRepoRoot) {
       state.lastConfigRootsKey = "";
       state.lastConfigGroups = [];
       state.lastConfigError = "";
       state.lastConfigLoaded = false;
-      state.lastHasMissingConfig = false;
       this.postMessage({
         type: "state",
         currentBranch: "",
         configGroups: [],
-        configSummary: [],
         configError: t("workspaceNotFound"),
         configLoaded: false,
-        hasMissingConfig: false,
       });
       return;
     }
     state.lastWorkspaceRoot = activeRepoRoot;
     const repoRoots = await resolveRepoRoots(activeRepoRoot);
     const repoRootsKey = repoRoots.join("|");
-    const shouldRefreshGroup =
-      loadConfig && refreshRepoRoot && repoRoots.includes(refreshRepoRoot);
     if (state.lastConfigRootsKey !== repoRootsKey) {
       state.lastConfigRootsKey = repoRootsKey;
       state.lastConfigGroups = [];
       state.lastConfigError = "";
       state.lastConfigLoaded = false;
-      state.lastHasMissingConfig = false;
     }
     try {
       const currentBranch = activeRepoRoot
         ? await getCurrentBranch(activeRepoRoot).catch(() => "")
         : "";
       if (loadConfig) {
-        if (shouldRefreshGroup && state.lastConfigLoaded) {
-          const { group } = await getConfigGroup(refreshRepoRoot);
-          const nextGroups = [...state.lastConfigGroups];
-          const index = nextGroups.findIndex(
-            (item) => item.repoRoot === refreshRepoRoot
-          );
-          if (index >= 0) {
-            nextGroups[index] = group;
-          } else {
-            nextGroups.push(group);
-          }
-          state.lastConfigGroups = nextGroups;
-          state.lastConfigLoaded = true;
-          state.lastHasMissingConfig = nextGroups.some(
-            (item) => item && item.missingConfig
-          );
-        } else {
-          const { groups, error } = await getConfigGroups(repoRoots);
-          state.lastConfigGroups = groups;
-          state.lastConfigError = error;
-          state.lastConfigLoaded = true;
-          state.lastHasMissingConfig = groups.some(
-            (item) => item && item.missingConfig
-          );
-        }
+        const { groups, error } = await getConfigGroups(repoRoots);
+        state.lastConfigGroups = groups;
+        state.lastConfigError = error;
+        state.lastConfigLoaded = true;
       }
       this.postMessage({
         type: "state",
         currentBranch,
         configGroups: state.lastConfigGroups,
-        configSummary: state.lastConfigGroups.flatMap((group) => group.items),
         configError: state.lastConfigError,
         configLoaded: state.lastConfigLoaded,
-        hasMissingConfig: state.lastHasMissingConfig,
       });
     } catch (error) {
       this.postMessage({
@@ -626,21 +486,29 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       configFile = null;
     }
     const settings = resolveDemandBranchSettings(configFile);
-    if (settings.prefixes.length === 0) {
+    if (settings.demandTypes.length === 0) {
       notifyError(t("demandPrefixEmpty"));
       return;
     }
-    const typePick = await vscode.window.showQuickPick(
-      settings.prefixes.map((prefix) => ({
-        label: prefix,
+    type DemandTypePick = vscode.QuickPickItem & {
+      value: string;
+      commitPrefix: string;
+    };
+    const demandTypeItems: DemandTypePick[] = settings.demandTypes.map(
+      (type) => ({
+        label: type.prefix,
         description:
-          prefix === "feature"
+          type.prefix === "feature"
             ? t("demandTypeFeature")
-            : prefix === "fix"
+            : type.prefix === "fix"
             ? t("demandTypeFix")
             : "",
-        value: prefix,
-      })),
+        value: type.prefix,
+        commitPrefix: type.commitPrefix,
+      })
+    );
+    const typePick = await vscode.window.showQuickPick(
+      demandTypeItems,
       { placeHolder: t("demandTypePlaceholder") }
     );
     if (!typePick) {
@@ -700,7 +568,11 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       }
       baseBranch = pick;
     }
-    const demandMessage = input.trim().replace(/\s+/g, " ");
+    const commitPrefix = typePick.commitPrefix || typePick.value;
+    const demandMessage = formatDemandMessage(
+      input.trim().replace(/\s+/g, " "),
+      commitPrefix
+    );
     let branchName = "";
     this.postMessage({
       type: "info",
@@ -793,7 +665,10 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
     } catch {
       lastCommitMessage = "";
     }
-    const baseMessage = lastCommitMessage || storedDemandMessage;
+    const baseMessage = pickBaseCommitMessage(
+      lastCommitMessage,
+      storedDemandMessage
+    );
     if (!baseMessage || baseMessage.trim().length === 0) {
       notifyError(t("demandMessageMissing"));
       return;
@@ -872,7 +747,10 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
     } catch {
       lastCommitMessage = "";
     }
-    const baseMessage = lastCommitMessage || storedDemandMessage;
+    const baseMessage = pickBaseCommitMessage(
+      lastCommitMessage,
+      storedDemandMessage
+    );
     if (!baseMessage || baseMessage.trim().length === 0) {
       notifyError(t("demandMessageMissing"));
       return;
@@ -950,10 +828,25 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
         ? activeRepoRoot
         : repoRoots[0];
     const cwd = requestedRepoRoot ?? defaultRepoRoot;
+    const currentBranch = await getCurrentBranch(cwd).catch(() => "");
 
     try {
       // 0. 拉取最新代码
-      await runGit(["pull"], cwd);
+      try {
+        await runGit(["pull"], cwd);
+      } catch (error) {
+        const message = getErrorMessage(error);
+        if (isNoUpstreamError(message)) {
+          notifyInfo(
+            t("pullSkippedNoUpstream", {
+              branch: currentBranch || "-",
+            })
+          );
+        } else {
+          notifyError(t("pullFailed", { error: message }));
+          return;
+        }
+      }
 
       // 1. 获取最近的 commit 历史（最多 50 条）
       const logResult = await runGit(
@@ -984,24 +877,25 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
         return match ? match[1] : msg;
       };
 
-      const preSelectedIndices: number[] = [];
-      if (commits.length > 0) {
-        const firstBase = getBaseMessage(commits[0].message);
-        if (firstBase) {
-          for (let i = 0; i < commits.length; i++) {
-            const base = getBaseMessage(commits[i].message);
-            if (base === firstBase) {
-              preSelectedIndices.push(i);
-            } else {
-              break; // 遇到不同的基础信息就停止
-            }
+      let preSelectedIndices: number[] = [];
+      for (let start = 0; start < commits.length; start += 1) {
+        const base = getBaseMessage(commits[start].message);
+        if (!base) {
+          continue;
+        }
+        const indices: number[] = [];
+        for (let i = start; i < commits.length; i += 1) {
+          const nextBase = getBaseMessage(commits[i].message);
+          if (nextBase === base) {
+            indices.push(i);
+          } else {
+            break; // 遇到不同的基础信息就停止
           }
         }
-      }
-
-      // 至少需要 2 个 commit 才能合并
-      if (preSelectedIndices.length < 2) {
-        preSelectedIndices.length = 0;
+        if (indices.length >= 2) {
+          preSelectedIndices = indices;
+          break;
+        }
       }
 
       // 4. 显示多选列表
@@ -1027,15 +921,20 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       const maxIndex = Math.max(...selectedIndices);
       const count = maxIndex + 1;
 
-      // 6. 获取基础提交信息
-      const baseMessage = getBaseMessage(commits[0].message);
+      // 6. 使用选中范围中最后一条提交信息作为提交说明
+      const baseMessage = commits[maxIndex]?.message || commits[0].message;
 
       // 7. 执行 git reset --soft 和 git commit
       const resetTarget = `HEAD~${count}`;
       await runGit(["reset", "--soft", resetTarget], cwd);
       await runGit(["commit", "-m", baseMessage], cwd);
 
-      notifyInfo(t("rebaseSuccess", { count: String(count) }));
+      notifyInfo(
+        t("rebaseSuccessWithMessage", {
+          count: String(count),
+          message: baseMessage,
+        })
+      );
     } catch (error) {
       notifyError(t("rebaseFailed", { error: getErrorMessage(error) }));
     }
@@ -1146,7 +1045,7 @@ function resolveDemandBranchSettings(configFile: MergeConfigFile | null): {
   apiKey: string;
   baseUrl: string;
   model: string;
-  prefixes: string[];
+  demandTypes: { prefix: string; commitPrefix: string }[];
   releasePrefix: string;
 } {
   const fallback = getDeepseekSettings();
@@ -1155,14 +1054,28 @@ function resolveDemandBranchSettings(configFile: MergeConfigFile | null): {
   const baseUrl =
     (demandConfig?.deepseekBaseUrl ?? "").trim() || fallback.baseUrl;
   const model = (demandConfig?.deepseekModel ?? "").trim() || fallback.model;
-  const hasCustomPrefixes = Array.isArray(demandConfig?.prefixes);
-  const customPrefixes = normalizePrefixes(demandConfig?.prefixes ?? []);
-  const prefixes = hasCustomPrefixes ? customPrefixes : DEFAULT_DEMAND_PREFIXES;
+  const customTypes = normalizeDemandTypes(demandConfig?.types);
+  const legacyPrefixes = normalizePrefixes(demandConfig?.prefixes ?? []);
+  const legacyCommitPrefixes = normalizeCommitPrefixes(
+    demandConfig?.commitPrefixes
+  );
+  const demandTypes =
+    customTypes.length > 0
+      ? customTypes
+      : legacyPrefixes.length > 0
+      ? legacyPrefixes.map((prefix) => ({
+          prefix,
+          commitPrefix: legacyCommitPrefixes[prefix] ?? prefix,
+        }))
+      : DEFAULT_DEMAND_TYPES;
   const releasePrefix = normalizeReleasePrefix(demandConfig?.releasePrefix);
-  return { apiKey, baseUrl, model, prefixes, releasePrefix };
+  return { apiKey, baseUrl, model, demandTypes, releasePrefix };
 }
 
-const DEFAULT_DEMAND_PREFIXES = ["feature", "fix"];
+const DEFAULT_DEMAND_TYPES = [
+  { prefix: "feature", commitPrefix: "feat" },
+  { prefix: "fix", commitPrefix: "fix" },
+];
 const DEFAULT_RELEASE_PREFIX = "release";
 
 function normalizePrefixes(prefixes: unknown): string[] {
@@ -1185,6 +1098,52 @@ function normalizePrefixes(prefixes: unknown): string[] {
 function normalizeReleasePrefix(value?: string): string {
   const normalized = toBranchSlug((value ?? "").trim());
   return normalized || DEFAULT_RELEASE_PREFIX;
+}
+
+function normalizeCommitPrefixes(input: unknown): Record<string, string> {
+  if (!input || typeof input !== "object") {
+    return {};
+  }
+  const entries = Object.entries(input as Record<string, unknown>);
+  const result: Record<string, string> = {};
+  for (const [key, value] of entries) {
+    const normalizedKey = toBranchSlug(String(key ?? ""));
+    const normalizedValue = toBranchSlug(String(value ?? ""));
+    if (!normalizedKey || !normalizedValue) {
+      continue;
+    }
+    result[normalizedKey] = normalizedValue;
+  }
+  return result;
+}
+
+function normalizeDemandTypes(
+  input: unknown
+): { prefix: string; commitPrefix: string }[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const result: { prefix: string; commitPrefix: string }[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const raw = item as Record<string, unknown>;
+    const prefix = toBranchSlug(String(raw.prefix ?? ""));
+    if (!prefix || seen.has(prefix)) {
+      continue;
+    }
+    const commitPrefix = toBranchSlug(
+      String(raw.commitPrefix ?? raw.prefix ?? "")
+    );
+    seen.add(prefix);
+    result.push({
+      prefix,
+      commitPrefix: commitPrefix || prefix,
+    });
+  }
+  return result;
 }
 
 async function getLatestReleaseBranch(
@@ -1248,4 +1207,70 @@ function toBranchSlug(input: string): string {
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/_+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+function isNoUpstreamError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("no tracking information") ||
+    normalized.includes("set-upstream-to") ||
+    message.includes("没有跟踪") ||
+    message.includes("未设置上游")
+  );
+}
+
+function pickBaseCommitMessage(
+  lastCommitMessage: string,
+  storedDemandMessage: string
+): string {
+  const trimmedLast = (lastCommitMessage ?? "").trim();
+  const trimmedStored = (storedDemandMessage ?? "").trim();
+  if (trimmedStored) {
+    const prefix = extractCommitPrefix(trimmedStored);
+    if (prefix && !hasCommitPrefix(trimmedLast, prefix)) {
+      return trimmedStored;
+    }
+  }
+  return trimmedLast || trimmedStored;
+}
+
+function formatDemandMessage(message: string, prefix: string): string {
+  const trimmed = (message ?? "").trim();
+  if (!trimmed) {
+    return "";
+  }
+  const normalizedPrefix = (prefix ?? "").trim();
+  if (!normalizedPrefix) {
+    return trimmed;
+  }
+  if (hasCommitPrefix(trimmed, normalizedPrefix)) {
+    return trimmed;
+  }
+  return `${normalizedPrefix}: ${trimmed}`;
+}
+
+function hasCommitPrefix(message: string, prefix: string): boolean {
+  const trimmed = (message ?? "").trim();
+  if (!trimmed) {
+    return false;
+  }
+  const lowerMessage = trimmed.toLowerCase();
+  const lowerPrefix = (prefix ?? "").trim().toLowerCase();
+  if (!lowerPrefix) {
+    return false;
+  }
+  if (!lowerMessage.startsWith(lowerPrefix)) {
+    return false;
+  }
+  const rest = trimmed.slice(lowerPrefix.length);
+  return rest.length === 0 || /^[\s:：-]/.test(rest);
+}
+
+function extractCommitPrefix(message: string): string {
+  const trimmed = (message ?? "").trim();
+  if (!trimmed) {
+    return "";
+  }
+  const match = trimmed.match(/^([^:：\s]+)[:：]/);
+  return match ? match[1] : "";
 }

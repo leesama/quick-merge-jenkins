@@ -4,12 +4,7 @@ import * as vscode from "vscode";
 import { CONFIG_FILE_NAME, LEGACY_CONFIG_FILE_NAME } from "./constants";
 import { t } from "./i18n";
 import { pathExists } from "./repo";
-import {
-  MergeConfigFile,
-  MergeProfile,
-  MergeStrategy,
-  ResolvedMergePlan,
-} from "./types";
+import { MergeConfigFile } from "./types";
 
 export async function readMergeConfig(cwd: string): Promise<MergeConfigFile> {
   const configInfo = await getConfigPathInfo(cwd);
@@ -44,105 +39,6 @@ export async function readMergeConfig(cwd: string): Promise<MergeConfigFile> {
   } catch {
     throw new Error(t("configParseFailed", { configLabel }));
   }
-}
-
-export function normalizeConfigFile(configFile: MergeConfigFile): {
-  profiles: MergeProfile[];
-} {
-  if (!Array.isArray(configFile.profiles) || configFile.profiles.length === 0) {
-    throw new Error(t("configMustHaveProfiles"));
-  }
-  const profiles = configFile.profiles;
-  return { profiles };
-}
-
-export function selectProfile(
-  profiles: MergeProfile[],
-  profileKey?: string
-): MergeProfile {
-  if (profiles.length === 0) {
-    throw new Error(t("noMergeProfiles"));
-  }
-  if (!profileKey) {
-    if (profiles.length === 1) {
-      return profiles[0];
-    }
-    throw new Error(t("mergeProfileUnspecified"));
-  }
-  const byId = profiles.find((profile) => profile.id?.trim() === profileKey);
-  if (byId) {
-    return byId;
-  }
-  const index = Number(profileKey);
-  if (Number.isInteger(index) && index >= 0 && index < profiles.length) {
-    return profiles[index];
-  }
-  throw new Error(t("mergeProfileNotFound"));
-}
-
-export function getProfileKey(profile: MergeProfile, index: number): string {
-  const id = (profile.id ?? "").trim();
-  if (id) {
-    return id;
-  }
-  return String(index);
-}
-
-export function getProfileLabel(profile: MergeProfile, index: number): string {
-  const id = (profile.id ?? "").trim();
-  if (id) {
-    return id;
-  }
-  return t("mergeProfileLabel", { index: String(index + 1) });
-}
-
-export function planLabel(label: string, plan: ResolvedMergePlan): string {
-  if (label) {
-    return label;
-  }
-  return t("mergeToLabel", { branch: plan.targetBranch });
-}
-
-export function normalizeStrategy(value?: string): {
-  flag: MergeStrategy;
-  label: string;
-} {
-  const normalized = (value ?? "").trim();
-  if (!normalized || normalized === "merge" || normalized === "default") {
-    return { flag: "", label: "default" };
-  }
-  if (
-    normalized === "--no-ff" ||
-    normalized === "no-ff" ||
-    normalized === "no_ff"
-  ) {
-    return { flag: "--no-ff", label: "--no-ff" };
-  }
-  if (
-    normalized === "--ff-only" ||
-    normalized === "ff-only" ||
-    normalized === "ff_only"
-  ) {
-    return { flag: "--ff-only", label: "--ff-only" };
-  }
-  throw new Error(t("mergeStrategyInvalid"));
-}
-
-export function buildConfigSummary(plan: ResolvedMergePlan): string[] {
-  const lines = [
-    t("summarySourceBranch", { branch: plan.sourceBranch }),
-    t("summaryTargetBranch", { branch: plan.targetBranch }),
-    t("summaryStrategy", { strategy: plan.strategyLabel }),
-    plan.pushAfterMerge
-      ? t("summaryPushRemote", { remote: plan.pushRemote ?? "-" })
-      : t("summaryNoPush"),
-  ];
-  if (plan.jenkins) {
-    lines.push(t("summaryJenkinsJob", { job: plan.jenkins.job }));
-  } else {
-    lines.push(t("summaryJenkinsDisabled"));
-  }
-  return lines;
 }
 
 export async function getDefaultConfigTemplate(

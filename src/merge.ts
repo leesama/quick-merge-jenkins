@@ -1,28 +1,13 @@
 import {
   getCommitParentCount,
-  getCurrentBranch,
-  getDefaultRemote,
   getHeadCommit,
   listChangedFiles,
   listConflicts,
-  listRemotes,
   runGit,
 } from "./git";
 import { triggerJenkinsBuild } from "./jenkins";
-import {
-  normalizeConfigFile,
-  normalizeStrategy,
-  readMergeConfig,
-  selectProfile,
-} from "./config";
 import { getErrorMessage } from "./utils";
-import {
-  MergeProfile,
-  MergeResult,
-  ResolvedMergePlan,
-  JenkinsConfig,
-} from "./types";
-import { t } from "./i18n";
+import { MergeResult, ResolvedMergePlan, JenkinsConfig } from "./types";
 
 export async function performMerge(
   cwd: string,
@@ -118,78 +103,5 @@ export async function performMerge(
     jenkinsStatus,
     jenkinsJob,
     jenkinsError,
-  };
-}
-
-export async function loadMergePlan(
-  cwd: string,
-  profileKey?: string
-): Promise<ResolvedMergePlan> {
-  const [currentBranch, remotes] = await Promise.all([
-    getCurrentBranch(cwd),
-    listRemotes(cwd),
-  ]);
-  if (!currentBranch) {
-    throw new Error(t("currentBranchMissing"));
-  }
-  const configFile = await readMergeConfig(cwd);
-  const { profiles } = normalizeConfigFile(configFile);
-  const profile = selectProfile(profiles, profileKey);
-  return resolveMergePlan(profile, currentBranch, remotes);
-}
-
-export function resolveMergePlan(
-  config: MergeProfile,
-  currentBranch: string,
-  remotes: string[]
-): ResolvedMergePlan {
-  const targetBranch = (config.targetBranch ?? "").trim();
-  if (!targetBranch) {
-    throw new Error(t("missingTargetBranch"));
-  }
-  const sourceBranch = (config.sourceBranch ?? "").trim() || currentBranch;
-  if (!sourceBranch) {
-    throw new Error(t("missingSourceBranch"));
-  }
-  if (sourceBranch === targetBranch) {
-    throw new Error(t("sameSourceTarget"));
-  }
-
-  const strategyInfo = normalizeStrategy(config.strategy);
-  const pushAfterMerge = config.pushAfterMerge !== false;
-  let pushRemote: string | null = null;
-  if (pushAfterMerge) {
-    const desiredRemote = (config.pushRemote ?? "").trim();
-    const defaultRemote = getDefaultRemote(remotes);
-    if (desiredRemote) {
-      if (remotes.length > 0 && !remotes.includes(desiredRemote)) {
-        throw new Error(t("remoteNotFound", { remote: desiredRemote }));
-      }
-      pushRemote = desiredRemote;
-    } else {
-      pushRemote = defaultRemote;
-    }
-    if (!pushRemote) {
-      throw new Error(t("noRemote"));
-    }
-  }
-
-  let jenkins: JenkinsConfig | undefined;
-  if (config.jenkins && config.jenkins.enabled !== false) {
-    if (!config.jenkins.url || !config.jenkins.job) {
-      throw new Error(t("jenkinsMissingConfig"));
-    }
-    jenkins = config.jenkins;
-  }
-
-  return {
-    currentBranch,
-    sourceBranch,
-    targetBranch,
-    strategyFlag: strategyInfo.flag,
-    strategyLabel: strategyInfo.label,
-    pushAfterMerge,
-    pushRemote,
-    jenkins,
   };
 }

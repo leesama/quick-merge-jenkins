@@ -1,7 +1,10 @@
 {
   // Demand branch settings (created from latest release_YYYYMMDD branch)
   "demandBranch": {
-    "prefixes": ["feature", "fix"],
+    "types": [
+      { "prefix": "feature", "commitPrefix": "feat" },
+      { "prefix": "fix", "commitPrefix": "fix" }
+    ],
     "releasePrefix": "release",
     "deepseekApiKey": "",
     "deepseekBaseUrl": "https://api.deepseek.com/v1",
@@ -23,37 +26,6 @@
         "ENV": "${deployEnv}"
       }
     }
-  },
-  "profiles": [
-    {
-      "id": "merge-main",
-      "sourceBranch": "",
-      "targetBranch": "main",
-      "strategy": "default",
-      "pushAfterMerge": true,
-      "pushRemote": "origin",
-      "jenkins": {
-        "enabled": false,
-        "url": "https://jenkins.example.com",
-        "job": "folder/jobName",
-        "token": "",
-        "user": "",
-        "apiToken": "",
-        "crumb": true,
-        "parameters": {
-          "SOURCE_BRANCH": "${sourceBranch}",
-          "TARGET_BRANCH": "${targetBranch}",
-          "MERGE_COMMIT": "${mergeCommit}"
-        }
-      }
-    },
-    {
-      "id": "merge-release",
-      "sourceBranch": "",
-      "targetBranch": "release",
-      "strategy": "no-ff",
-      "pushAfterMerge": true,
-      "pushRemote": "origin"
-    }
-  ]
+  }
+  // Add more fields if needed
 }

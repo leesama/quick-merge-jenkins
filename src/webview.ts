@@ -159,11 +159,6 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       flex: 1;
     }
 
-    .config-group-actions button {
-      width: auto;
-      padding: 4px 8px;
-      font-size: 0.85em;
-    }
 
     .config-group-demand {
       margin-top: 6px;
@@ -191,34 +186,22 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       font-size: 0.9em;
     }
 
-    .footer-actions button.icon-button,
-    .config-group-actions button.icon-button {
-      font-size: 1.6em;
-      line-height: 1;
+    .config-group-squash {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
+
+    .config-group-squash button {
+      width: 100%;
+      padding: 6px 10px;
+      font-size: 0.9em;
+    }
+
 
     .config-group-error {
       color: var(--vscode-errorForeground);
-    }
-
-    .config-item {
-      border: 1px solid var(--vscode-widget-border);
-      border-radius: 4px;
-      padding: 10px;
-      background-color: var(--vscode-editor-background);
-    }
-
-    .config-item button {
-      width: 100%;
-      text-align: left;
-    }
-
-    .config-item pre {
-      margin-top: 8px;
-      white-space: pre-wrap;
-      font-family: var(--vscode-editor-font-family);
-      font-size: 0.9em;
-      color: var(--vscode-descriptionForeground);
     }
 
     .current-branch-display {
@@ -285,8 +268,8 @@ export function getWebviewHtml(webview: vscode.Webview): string {
 </head>
 <body>
   <div class="footer-actions">
-    <div class="row" id="refreshRow">
-      <button id="refreshBtn" class="secondary" title="${strings.refreshTitle}" aria-label="${strings.refreshTitle}">⟳</button>
+    <div class="row">
+      <button id="createConfigBtn" class="secondary">${strings.createConfigLabel}</button>
     </div>
   </div>
 
@@ -324,9 +307,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
     const resultContent = document.getElementById('resultContent');
     const conflictSection = document.getElementById('conflictSection');
     const conflictContent = document.getElementById('conflictContent');
-    const refreshBtn = document.getElementById('refreshBtn');
-    let lastHasMissingConfig = false;
-    let pendingCreateOnLoad = false;
+    const createConfigBtn = document.getElementById('createConfigBtn');
 
     function format(template, params) {
       if (!params) {
@@ -363,39 +344,17 @@ export function getWebviewHtml(webview: vscode.Webview): string {
     }
 
     function setBusy(isBusy) {
-      refreshBtn.disabled = isBusy;
-      const configButtons = configListEl.querySelectorAll('button');
-      configButtons.forEach((button) => {
-        button.disabled = isBusy;
-      });
-    }
-
-    function appendConfigItems(container, items, repoRoot) {
-      for (const item of items) {
-        const itemEl = document.createElement('div');
-        itemEl.className = 'config-item';
-        const btn = document.createElement('button');
-        btn.textContent = item.label || i18n.mergeDefaultLabel;
-        btn.addEventListener('click', () => {
-          const payload = {
-            type: 'confirmMerge',
-            profileKey: item.key,
-            label: btn.textContent || i18n.mergeDefaultLabel,
-          };
-          if (repoRoot) {
-            payload.repoRoot = repoRoot;
-          }
-          vscode.postMessage(payload);
-        });
-        itemEl.appendChild(btn);
-        const summary = Array.isArray(item.summary) ? item.summary : [];
-        if (summary.length > 0) {
-          const pre = document.createElement('pre');
-          pre.textContent = summary.join('\\n');
-          itemEl.appendChild(pre);
+      const buttons = document.querySelectorAll('button');
+      buttons.forEach((button) => {
+        if (isBusy) {
+          button.dataset.wasDisabled = button.disabled ? 'true' : 'false';
+          button.disabled = true;
+        } else {
+          const wasDisabled = button.dataset.wasDisabled === 'true';
+          button.disabled = wasDisabled;
+          delete button.dataset.wasDisabled;
         }
-        container.appendChild(itemEl);
-      }
+      });
     }
 
     function appendDemandButton(container, repoRoot) {
@@ -411,7 +370,15 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         vscode.postMessage({ type: 'createDemandBranch', repoRoot });
       });
       actionsEl.appendChild(demandBtn);
+      container.appendChild(actionsEl);
+    }
 
+    function appendSquashButton(container, repoRoot) {
+      if (!repoRoot) {
+        return;
+      }
+      const actionsEl = document.createElement('div');
+      actionsEl.className = 'config-group-squash';
       const rebaseBtn = document.createElement('button');
       rebaseBtn.className = 'secondary';
       rebaseBtn.textContent = i18n.rebaseSquash;
@@ -419,7 +386,6 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         vscode.postMessage({ type: 'rebaseSquash', repoRoot });
       });
       actionsEl.appendChild(rebaseBtn);
-
       container.appendChild(actionsEl);
     }
 
@@ -491,23 +457,16 @@ export function getWebviewHtml(webview: vscode.Webview): string {
 
     function renderState(data) {
       const groups = Array.isArray(data.configGroups) ? data.configGroups : [];
-      const items = Array.isArray(data.configSummary) ? data.configSummary : [];
       const error = data.configError || '';
       const configLoaded = Boolean(data.configLoaded);
       const missingGroups = groups.filter((group) => group && group.missingConfig);
-      const hasMissingConfig = missingGroups.length > 0;
-      lastHasMissingConfig = hasMissingConfig;
-      if (pendingCreateOnLoad && configLoaded) {
-        pendingCreateOnLoad = false;
-        if (hasMissingConfig) {
-          vscode.postMessage({ type: 'openConfig' });
-        }
+      const shouldShowCreateConfig = !configLoaded || missingGroups.length > 0;
+      createConfigBtn.hidden = !shouldShowCreateConfig;
+      if (shouldShowCreateConfig) {
+        createConfigBtn.disabled = false;
+      } else {
+        createConfigBtn.disabled = true;
       }
-      const refreshLabel = '⟳';
-      refreshBtn.textContent = refreshLabel;
-      refreshBtn.title = i18n.refreshTitle;
-      refreshBtn.setAttribute('aria-label', i18n.refreshTitle);
-      refreshBtn.classList.add('icon-button');
       configListEl.innerHTML = '';
       if (error) {
         const errorEl = document.createElement('div');
@@ -552,27 +511,6 @@ export function getWebviewHtml(webview: vscode.Webview): string {
           });
         }
         headerEl.appendChild(titleEl);
-        if (group.repoRoot) {
-          const actionsEl = document.createElement('div');
-          actionsEl.className = 'config-group-actions';
-          const refreshGroupBtn = document.createElement('button');
-          refreshGroupBtn.className = 'secondary';
-          refreshGroupBtn.textContent = refreshLabel;
-          refreshGroupBtn.title = i18n.refreshTitle;
-          refreshGroupBtn.setAttribute(
-            'aria-label',
-            i18n.refreshTitle
-          );
-          refreshGroupBtn.classList.add('icon-button');
-          refreshGroupBtn.addEventListener('click', () => {
-            vscode.postMessage({
-              type: 'refreshRepo',
-              repoRoot: group.repoRoot,
-            });
-          });
-          actionsEl.appendChild(refreshGroupBtn);
-          headerEl.appendChild(actionsEl);
-        }
         groupEl.appendChild(headerEl);
         appendDemandButton(groupEl, group.repoRoot);
         appendDeployButton(groupEl, group.repoRoot, group.deployToTest);
@@ -583,18 +521,8 @@ export function getWebviewHtml(webview: vscode.Webview): string {
             error: group.error,
           });
           groupEl.appendChild(groupError);
-          configListEl.appendChild(groupEl);
-          return;
         }
-        const groupItems = Array.isArray(group.items) ? group.items : [];
-        if (groupItems.length === 0) {
-          const emptyEl = document.createElement('div');
-          emptyEl.textContent = i18n.noProfilesFound;
-          groupEl.appendChild(emptyEl);
-          configListEl.appendChild(groupEl);
-          return;
-        }
-        appendConfigItems(groupEl, groupItems, group.repoRoot);
+        appendSquashButton(groupEl, group.repoRoot);
         configListEl.appendChild(groupEl);
         return;
       }
@@ -618,27 +546,6 @@ export function getWebviewHtml(webview: vscode.Webview): string {
             });
           }
           headerEl.appendChild(titleEl);
-          if (group.repoRoot) {
-            const actionsEl = document.createElement('div');
-            actionsEl.className = 'config-group-actions';
-            const refreshGroupBtn = document.createElement('button');
-            refreshGroupBtn.className = 'secondary';
-            refreshGroupBtn.textContent = refreshLabel;
-            refreshGroupBtn.title = i18n.refreshTitle;
-            refreshGroupBtn.setAttribute(
-              'aria-label',
-              i18n.refreshTitle
-            );
-            refreshGroupBtn.classList.add('icon-button');
-            refreshGroupBtn.addEventListener('click', () => {
-              vscode.postMessage({
-                type: 'refreshRepo',
-                repoRoot: group.repoRoot,
-              });
-            });
-            actionsEl.appendChild(refreshGroupBtn);
-            headerEl.appendChild(actionsEl);
-          }
           groupEl.appendChild(headerEl);
           appendDemandButton(groupEl, group.repoRoot);
           appendDeployButton(groupEl, group.repoRoot, group.deployToTest);
@@ -650,25 +557,11 @@ export function getWebviewHtml(webview: vscode.Webview): string {
             });
             groupEl.appendChild(groupError);
           }
-          const groupItems = Array.isArray(group.items) ? group.items : [];
-          if (groupItems.length === 0 && !group.error) {
-            const emptyEl = document.createElement('div');
-            emptyEl.textContent = i18n.noProfilesFound;
-            groupEl.appendChild(emptyEl);
-          } else {
-            appendConfigItems(groupEl, groupItems, group.repoRoot);
-          }
+          appendSquashButton(groupEl, group.repoRoot);
           configListEl.appendChild(groupEl);
         }
         return;
       }
-      if (items.length === 0) {
-        const emptyEl = document.createElement('div');
-        emptyEl.textContent = i18n.noProfilesFound;
-        configListEl.appendChild(emptyEl);
-        return;
-      }
-      appendConfigItems(configListEl, items);
     }
 
     function renderResult(result) {
@@ -757,13 +650,8 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       }
     }
 
-    refreshBtn.addEventListener('click', () => {
-      if (lastHasMissingConfig) {
-        vscode.postMessage({ type: 'openConfig' });
-        return;
-      }
-      pendingCreateOnLoad = true;
-      vscode.postMessage({ type: 'requestState', loadConfig: true });
+    createConfigBtn.addEventListener('click', () => {
+      vscode.postMessage({ type: 'openConfig' });
     });
 
     document.getElementById('openConflictFiles').addEventListener('click', () => {
@@ -790,11 +678,6 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         setBusy(false);
         return;
       }
-      if (message.type === 'mergeStarted') {
-        setStatus(message.message || i18n.mergeInProgress, 'info');
-        setBusy(true);
-        return;
-      }
       if (message.type === 'deployTestStarted') {
         setStatus(message.message || i18n.deployTestInProgress, 'info');
         setBusy(true);
@@ -817,7 +700,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       }
     });
 
-    vscode.postMessage({ type: 'requestState', loadConfig: false });
+    vscode.postMessage({ type: 'requestState', loadConfig: true });
   </script>
 </body>
 </html>`;
