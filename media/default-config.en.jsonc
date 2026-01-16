@@ -26,6 +26,10 @@
         "ENV": "${deployEnv}"
       }
     }
+  },
+  // Deploy to prod config (create today's branch from latest prefix branch then merge)
+  "deployToProd": {
+    "prodPrefix": ["release"]
   }
   // Add more fields if needed
 }

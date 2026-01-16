@@ -168,13 +168,45 @@ const MESSAGES = {
     zh: "正在发布到测试环境...",
     en: "Deploying to test...",
   },
+  deployProdStarted: {
+    zh: "正在部署到生产环境...",
+    en: "Deploying to prod...",
+  },
   deployTestSuccess: {
     zh: "已触发测试环境发布：{job}",
     en: "Triggered test deploy: {job}",
   },
+  deployProdSuccess: {
+    zh: "已创建生产分支并完成合并：{branch}",
+    en: "Created production branch and merged: {branch}",
+  },
   deployTestFailed: {
     zh: "发布到测试环境失败：{error}",
     en: "Test deploy failed: {error}",
+  },
+  deployProdFailed: {
+    zh: "部署到生产环境失败：{error}",
+    en: "Deploy to prod failed: {error}",
+  },
+  deployProdPrefixEmpty: {
+    zh: "生产发布分支前缀为空，请在配置文件 deployToProd.prodPrefix 中设置。",
+    en: "Prod prefixes are empty; set deployToProd.prodPrefix in config.",
+  },
+  deployProdBaseBranchMissing: {
+    zh: "未找到 {prefix}_YYYYMMDD 分支。",
+    en: "No {prefix}_YYYYMMDD branch found.",
+  },
+  deployProdPickBranchesPlaceholder: {
+    zh: "选择要发布合并的分支",
+    en: "Select branches to deploy",
+  },
+  deployProdPickFeatBranchesPlaceholder: {
+    zh: "选择需要合并的 feat 分支（默认当前分支）",
+    en: "Select feat branches to merge (current branch selected)",
+  },
+  deployProdFeatBranchEmpty: {
+    zh: "未找到可合并的 feat 分支。",
+    en: "No feat branches available to merge.",
   },
   deployTestMissingConfig: {
     zh: "测试环境发布配置缺少 Jenkins 信息。",
@@ -284,9 +316,24 @@ const MESSAGES = {
     en: "Stay on target (resolve conflicts)",
   },
   deployTestLabel: { zh: "发布到测试环境", en: "Deploy to test" },
+  deployProdLabel: { zh: "部署到生产环境", en: "Deploy to prod" },
+  squashDeployProdLabel: {
+    zh: "合并提交并部署到生产环境",
+    en: "Squash & Deploy to prod",
+  },
   demandCreate: { zh: "创建需求分支", en: "Create demand branch" },
   demandCommit: { zh: "提交代码", en: "Commit changes" },
   rebaseSquash: { zh: "合并提交", en: "Squash commits" },
+  squashMorePrompt: {
+    zh: "是否继续合并其他分支的提交？",
+    en: "Squash commits on another branch?",
+  },
+  squashMoreYes: { zh: "是", en: "Yes" },
+  squashMoreNo: { zh: "否", en: "No" },
+  squashPickBranchPlaceholder: {
+    zh: "选择要合并提交的分支",
+    en: "Select a branch to squash",
+  },
   commitAndDeploy: { zh: "提交并发布到测试", en: "Commit & Deploy to test" },
   refreshHint: {
     zh: "正在读取配置...",
@@ -413,6 +460,9 @@ export interface WebviewStrings {
   deployTestLabel: string;
   deployTestInProgress: string;
   deployTestMissingConfig: string;
+  deployProdLabel: string;
+  deployProdInProgress: string;
+  squashDeployProdLabel: string;
   genericError: string;
   configErrorMessage: string;
   listSeparator: string;
@@ -428,6 +478,8 @@ export function getWebviewStrings(): WebviewStrings {
     checkoutOriginal: t("checkoutOriginal"),
     stayOnTarget: t("stayOnTarget"),
     deployTestLabel: t("deployTestLabel"),
+    deployProdLabel: t("deployProdLabel"),
+    squashDeployProdLabel: t("squashDeployProdLabel"),
     demandCreate: t("demandCreate"),
     demandCommit: t("demandCommit"),
     rebaseSquash: t("rebaseSquash"),
@@ -458,6 +510,7 @@ export function getWebviewStrings(): WebviewStrings {
     stayOnTargetStatus: t("stayOnTargetStatus"),
     deployTestInProgress: t("deployTestStarted"),
     deployTestMissingConfig: t("deployTestMissingConfig"),
+    deployProdInProgress: t("deployProdStarted"),
     genericError: t("genericError"),
     configErrorMessage: t("configErrorMessage"),
     listSeparator: t("listSeparator"),

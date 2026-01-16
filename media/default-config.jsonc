@@ -26,6 +26,10 @@
         "ENV": "${deployEnv}"
       }
     }
+  },
+  // 发布到生产环境配置（基于最新分支创建当天分支并合并）
+  "deployToProd": {
+    "prodPrefix": ["release"]
   }
   // 可按需添加更多配置字段
 }

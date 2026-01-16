@@ -5,11 +5,13 @@
 ## 功能
 
 - 发布到测试环境：合并当前分支到目标分支，并触发 Jenkins
+- 发布到生产环境：基于最新 `releasePrefix_YYYYMMDD` 分支创建当天分支，并合并当前分支
 - 冲突处理：列出冲突文件、打开合并编辑器、回到原分支
 - 结果展示：合并摘要（commit、变更文件、耗时）、推送与 Jenkins 触发结果
 - 需求分支创建：选择 feature/fix + 中文描述，自动翻译成英文并创建分支
 - 提交代码：复用需求描述作为提交信息
 - 合并提交：将最近一组相同前缀的提交合并为一条
+- 合并提交并发布到生产环境：合并提交后创建当天 release 分支并合并当前分支
 
 ## 使用方式
 
@@ -55,6 +57,10 @@
         "ENV": "${deployEnv}"
       }
     }
+  },
+  // 发布到生产环境配置（基于最新分支创建当天分支并合并）
+  "deployToProd": {
+    "prodPrefix": ["release", "hotfix"]
   }
 }
 ```
@@ -66,13 +72,15 @@
   - `types`：需求类型列表（可选，默认 feature/fix）
     - `prefix`：需求分支前缀
     - `commitPrefix`：提交信息前缀（默认等同于 `prefix`）
-  - `releasePrefix`：用于匹配基准分支的前缀（默认 `release`）
+  - `releasePrefix`：用于匹配基准分支的前缀（默认 `release`，同时用于生产分支创建）
   - `deepseekApiKey`：DeepSeek API Key（可放在配置文件中）
   - `deepseekBaseUrl`：DeepSeek API 地址（默认 `https://api.deepseek.com/v1`）
   - `deepseekModel`：DeepSeek 模型名（默认 `deepseek-chat`）
 - `deployToTest`：发布到测试环境配置（可选）
   - `targetBranch`：合并目标分支（默认 `pre-test`）
   - `jenkins`：Jenkins 触发配置
+- `deployToProd`：发布到生产环境配置（可选）
+  - `prodPrefix`：发布分支前缀数组（例如 `release`、`hotfix`），点击发布时会列出各前缀最新分支供多选
 
 ### Jenkins 配置
 

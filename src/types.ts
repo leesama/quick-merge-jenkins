@@ -32,6 +32,7 @@ export interface MergeFailure {
 export interface MergeConfigFile {
   demandBranch?: DemandBranchConfig;
   deployToTest?: DeployConfig;
+  deployToProd?: DeployProdConfig;
 }
 
 export interface JenkinsConfig {
@@ -48,6 +49,10 @@ export interface JenkinsConfig {
 export interface DeployConfig {
   targetBranch?: string;
   jenkins?: JenkinsConfig;
+}
+
+export interface DeployProdConfig {
+  prodPrefix?: string[];
 }
 
 export interface ResolvedMergePlan {

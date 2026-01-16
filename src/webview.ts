@@ -199,6 +199,19 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       font-size: 0.9em;
     }
 
+    .config-group-prod {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .config-group-prod button {
+      width: 100%;
+      padding: 6px 10px;
+      font-size: 0.9em;
+    }
+
 
     .config-group-error {
       color: var(--vscode-errorForeground);
@@ -379,6 +392,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       }
       const actionsEl = document.createElement('div');
       actionsEl.className = 'config-group-squash';
+      
       const rebaseBtn = document.createElement('button');
       rebaseBtn.className = 'secondary';
       rebaseBtn.textContent = i18n.rebaseSquash;
@@ -386,6 +400,23 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         vscode.postMessage({ type: 'rebaseSquash', repoRoot });
       });
       actionsEl.appendChild(rebaseBtn);
+
+      const deployProdBtn = document.createElement('button');
+      deployProdBtn.className = 'secondary';
+      deployProdBtn.textContent = i18n.deployProdLabel;
+      deployProdBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'deployProd', repoRoot });
+      });
+      actionsEl.appendChild(deployProdBtn);
+
+      const squashDeployProdBtn = document.createElement('button');
+      squashDeployProdBtn.className = 'secondary';
+      squashDeployProdBtn.textContent = i18n.squashDeployProdLabel;
+      squashDeployProdBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'squashDeployProd', repoRoot });
+      });
+      actionsEl.appendChild(squashDeployProdBtn);
+
       container.appendChild(actionsEl);
     }
 
@@ -522,8 +553,8 @@ export function getWebviewHtml(webview: vscode.Webview): string {
           });
           groupEl.appendChild(groupError);
         }
-        appendSquashButton(groupEl, group.repoRoot);
-        configListEl.appendChild(groupEl);
+          appendSquashButton(groupEl, group.repoRoot);
+          configListEl.appendChild(groupEl);
         return;
       }
       if (groups.length > 1) {
@@ -680,6 +711,11 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       }
       if (message.type === 'deployTestStarted') {
         setStatus(message.message || i18n.deployTestInProgress, 'info');
+        setBusy(true);
+        return;
+      }
+      if (message.type === 'deployProdStarted') {
+        setStatus(message.message || i18n.deployProdInProgress, 'info');
         setBusy(true);
         return;
       }

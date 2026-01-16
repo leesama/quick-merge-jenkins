@@ -7,11 +7,13 @@ Config-driven VSCode helper for test deployments and demand branch workflows. It
 ## Features
 
 - Deploy to test: merge current branch into target and trigger Jenkins
+- Deploy to pro: create today’s `releasePrefix_YYYYMMDD` branch from the latest release branch, then merge current branch
 - Conflict handling: list conflict files, open merge editor, return to original branch
 - Result details: merge summary (commit, changed files, duration), push + Jenkins status
 - Demand branch creation: choose feature/fix + Chinese description, auto-translate and create a branch
 - Commit changes: reuse the demand message for quick commits
 - Squash commits: squash recent commits with the same base message
+- Squash & deploy to prod: squash commits, then create today’s release branch and merge current branch
 
 ## Usage
 
@@ -57,6 +59,10 @@ Example:
         "ENV": "${deployEnv}"
       }
     }
+  },
+  // Deploy to prod config (create today's branch from latest prefix branch then merge)
+  "deployToProd": {
+    "prodPrefix": ["release", "hotfix"]
   }
 }
 ```
@@ -68,13 +74,15 @@ Example:
   - `types`: demand type list (optional, defaults to feature/fix)
     - `prefix`: branch prefix
     - `commitPrefix`: commit message prefix (defaults to `prefix`)
-  - `releasePrefix`: base branch prefix (default `release`)
+  - `releasePrefix`: base branch prefix (default `release`, also used for prod branch creation)
   - `deepseekApiKey`: DeepSeek API key (can be stored in config)
   - `deepseekBaseUrl`: DeepSeek API base URL (default `https://api.deepseek.com/v1`)
   - `deepseekModel`: DeepSeek model name (default `deepseek-chat`)
 - `deployToTest`: deploy-to-test button config (optional)
   - `targetBranch`: merge target branch (default `pre-test`)
   - `jenkins`: Jenkins trigger config
+- `deployToProd`: deploy-to-prod config (optional)
+  - `prodPrefix`: branch prefix list (e.g. `release`, `hotfix`); clicking deploy shows the latest branch per prefix for multi-select
 
 ### Jenkins Config
 
