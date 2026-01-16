@@ -1,12 +1,4 @@
 {
-  // UI labels
-  "ui": {
-    "refreshLabel": "⟳",
-    "openConfigLabel": {
-      "zh": "打开配置文件",
-      "en": "Open Config File"
-    }
-  },
   // Demand branch settings (created from latest release_YYYYMMDD branch)
   "demandBranch": {
     "prefixes": ["feature", "fix"],
@@ -15,13 +7,26 @@
     "deepseekBaseUrl": "https://api.deepseek.com/v1",
     "deepseekModel": "deepseek-chat"
   },
+  // Deploy to test (merge to targetBranch first, then trigger Jenkins)
+  "deployToTest": {
+    "targetBranch": "pre-test",
+    "jenkins": {
+      "url": "https://jenkins.example.com",
+      "job": "team/release/deploy-test",
+      "token": "",
+      "user": "",
+      "apiToken": "",
+      "crumb": true,
+      "parameters": {
+        "BRANCH": "${currentBranch}",
+        "COMMIT": "${headCommit}",
+        "ENV": "${deployEnv}"
+      }
+    }
+  },
   "profiles": [
     {
       "id": "merge-main",
-      "label": {
-        "zh": "合并到 main",
-        "en": "Merge to main"
-      },
       "sourceBranch": "",
       "targetBranch": "main",
       "strategy": "default",
@@ -44,10 +49,6 @@
     },
     {
       "id": "merge-release",
-      "label": {
-        "zh": "合并到 release",
-        "en": "Merge to release"
-      },
       "sourceBranch": "",
       "targetBranch": "release",
       "strategy": "no-ff",

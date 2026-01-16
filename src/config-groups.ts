@@ -9,41 +9,31 @@ import {
   readMergeConfig,
 } from "./config";
 import { getCurrentBranch, listRemotes } from "./git";
-import { getDefaultUiLabels, t } from "./i18n";
+import { t } from "./i18n";
 import { resolveMergePlan } from "./merge";
 import { formatRepoLabel } from "./repo";
 import { getErrorMessage } from "./utils";
-import { ConfigGroup, UiLabels } from "./types";
+import { ConfigGroup, DeployButtonInfo, MergeConfigFile } from "./types";
 
 export async function getConfigGroups(
   repoRoots: string[]
-): Promise<{ groups: ConfigGroup[]; error: string; uiLabels: UiLabels }> {
+): Promise<{ groups: ConfigGroup[]; error: string }> {
   if (repoRoots.length === 0) {
     return {
       groups: [],
       error: t("gitRepoNotFound"),
-      uiLabels: getDefaultUiLabels(),
     };
   }
   const results = await Promise.all(
     repoRoots.map((repoRoot) => getConfigGroup(repoRoot))
   );
   const groups = results.map((result) => result.group);
-  let uiLabels = getDefaultUiLabels();
-  if (repoRoots.length === 1) {
-    for (const result of results) {
-      if (!result.group.error) {
-        uiLabels = result.uiLabels;
-        break;
-      }
-    }
-  }
-  return { groups, error: "", uiLabels };
+  return { groups, error: "" };
 }
 
 export async function getConfigGroup(
   repoRoot: string
-): Promise<{ group: ConfigGroup; uiLabels: UiLabels }> {
+): Promise<{ group: ConfigGroup }> {
   const repoLabel = formatRepoLabel(repoRoot);
   const configInfo = await getConfigPathInfo(repoRoot);
   if (!configInfo.exists) {
@@ -58,7 +48,6 @@ export async function getConfigGroup(
         }),
         missingConfig: true,
       },
-      uiLabels: getDefaultUiLabels(),
     };
   }
   try {
@@ -92,8 +81,8 @@ export async function getConfigGroup(
         repoLabel,
         items,
         missingConfig: false,
+        deployToTest: getDeployToTestInfo(configFile),
       },
-      uiLabels: normalized.uiLabels,
     };
   } catch (error) {
     return {
@@ -104,7 +93,24 @@ export async function getConfigGroup(
         error: getErrorMessage(error),
         missingConfig: false,
       },
-      uiLabels: getDefaultUiLabels(),
     };
   }
+}
+
+function getDeployToTestInfo(
+  configFile: MergeConfigFile
+): DeployButtonInfo | undefined {
+  const deployConfig = configFile.deployToTest;
+  if (!deployConfig) {
+    return undefined;
+  }
+  const label = t("deployTestLabel");
+  const hasJenkins =
+    Boolean(deployConfig.jenkins?.url) && Boolean(deployConfig.jenkins?.job);
+  const isEnabled = hasJenkins;
+  return {
+    label,
+    enabled: isEnabled,
+    error: hasJenkins ? undefined : t("deployTestMissingConfig"),
+  };
 }

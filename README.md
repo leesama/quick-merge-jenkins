@@ -11,6 +11,7 @@ Config-driven VSCode merge helper. It reads `.quick-merge.jsonc` from the projec
 - Result details: merge summary (commit, changed files, duration), push + Jenkins status
 - Multiple profiles: define multiple merge buttons per project
 - Jenkins trigger: optional Jenkins build trigger (configured in file, not UI)
+- Deploy to test: optional Jenkins-driven test environment deployment
 - Demand branch creation: choose feature/fix + Chinese description, auto-translate and create a branch
 
 ## Usage
@@ -34,11 +35,7 @@ Example:
 {
   // UI labels
   "ui": {
-    "refreshLabel": "⟳",
-    "openConfigLabel": {
-      "zh": "打开配置文件",
-      "en": "Open Config File"
-    }
+    "refreshLabel": "⟳"
   },
   // Demand branch settings (created from latest release_YYYYMMDD branch)
   "demandBranch": {
@@ -47,6 +44,22 @@ Example:
     "deepseekApiKey": "",
     "deepseekBaseUrl": "https://api.deepseek.com/v1",
     "deepseekModel": "deepseek-chat"
+  },
+  // Deploy to test environment button
+  "deployToTest": {
+    "enabled": true,
+    "jenkins": {
+      "url": "https://jenkins.example.com",
+      "job": "team/release/deploy-test",
+      "user": "jenkins-user",
+      "apiToken": "jenkins-api-token",
+      "crumb": true,
+      "parameters": {
+        "BRANCH": "${currentBranch}",
+        "COMMIT": "${headCommit}",
+        "ENV": "${deployEnv}"
+      }
+    }
   },
   "profiles": [
     {
@@ -91,7 +104,7 @@ Example:
 
 ### Field Reference
 
-- `ui.refreshLabel` / `ui.openConfigLabel`: button labels (optional, supports `{ "zh": "...", "en": "..." }`)
+- `ui.refreshLabel`: refresh button label (optional, supports `{ "zh": "...", "en": "..." }`)
 - `demandBranch`: demand branch settings (optional)
   - demand branches are created from the latest `releasePrefix_YYYYMMDD` branch (remote preferred); if none, pick a branch
   - `prefixes`: branch prefixes (default `["feature", "fix"]`)
@@ -108,6 +121,10 @@ Example:
   - `pushAfterMerge`: push to remote (default `true`)
   - `pushRemote`: remote name (default `origin`, or first remote)
   - `jenkins`: Jenkins trigger config (optional)
+- `deployToTest`: deploy-to-test button config (optional)
+  - `enabled`: enable deploy button (default `true` if omitted)
+  - `label`: button label is built-in and not configurable
+  - `jenkins`: Jenkins trigger config
 
 ### Jenkins Config
 
@@ -119,6 +136,8 @@ Example:
 - `crumb`: set `true` when CSRF is enabled
 - `parameters`: supports variables:
   - `${sourceBranch}` `${targetBranch}` `${currentBranch}` `${mergeCommit}` `${strategy}` `${pushRemote}`
+- Deploy-to-test parameters also support:
+  - `${currentBranch}` `${headCommit}` `${deployEnv}` (defaults to `test`)
 
 ## Troubleshooting
 

@@ -2,14 +2,13 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 
 import { CONFIG_FILE_NAME, LEGACY_CONFIG_FILE_NAME } from "./constants";
-import { getDefaultUiLabels, resolveLocalizedString, t } from "./i18n";
+import { t } from "./i18n";
 import { pathExists } from "./repo";
 import {
   MergeConfigFile,
   MergeProfile,
   MergeStrategy,
   ResolvedMergePlan,
-  UiLabels,
 } from "./types";
 
 export async function readMergeConfig(cwd: string): Promise<MergeConfigFile> {
@@ -48,31 +47,13 @@ export async function readMergeConfig(cwd: string): Promise<MergeConfigFile> {
 }
 
 export function normalizeConfigFile(configFile: MergeConfigFile): {
-  uiLabels: UiLabels;
   profiles: MergeProfile[];
 } {
-  const uiLabels = normalizeUiLabels(configFile.ui ?? configFile.buttons);
   if (!Array.isArray(configFile.profiles) || configFile.profiles.length === 0) {
     throw new Error(t("configMustHaveProfiles"));
   }
   const profiles = configFile.profiles;
-  return { uiLabels, profiles };
-}
-
-export function normalizeUiLabels(input?: UiLabels): UiLabels {
-  const defaults = getDefaultUiLabels();
-  const defaultRefresh = resolveLocalizedString(defaults.refreshLabel, "⟳");
-  const defaultOpenConfig = resolveLocalizedString(
-    defaults.openConfigLabel,
-    t("openConfigLabel")
-  );
-  return {
-    refreshLabel: resolveLocalizedString(input?.refreshLabel, defaultRefresh),
-    openConfigLabel: resolveLocalizedString(
-      input?.openConfigLabel,
-      defaultOpenConfig
-    ),
-  };
+  return { profiles };
 }
 
 export function selectProfile(
@@ -108,10 +89,6 @@ export function getProfileKey(profile: MergeProfile, index: number): string {
 }
 
 export function getProfileLabel(profile: MergeProfile, index: number): string {
-  const localized = resolveLocalizedString(profile.label).trim();
-  if (localized) {
-    return localized;
-  }
   const id = (profile.id ?? "").trim();
   if (id) {
     return id;
@@ -134,7 +111,11 @@ export function normalizeStrategy(value?: string): {
   if (!normalized || normalized === "merge" || normalized === "default") {
     return { flag: "", label: "default" };
   }
-  if (normalized === "--no-ff" || normalized === "no-ff" || normalized === "no_ff") {
+  if (
+    normalized === "--no-ff" ||
+    normalized === "no-ff" ||
+    normalized === "no_ff"
+  ) {
     return { flag: "--no-ff", label: "--no-ff" };
   }
   if (

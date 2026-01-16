@@ -9,6 +9,7 @@
 - 结果展示：合并摘要（commit、变更文件、耗时）、推送与 Jenkins 触发结果
 - 多套合并配置：一个项目可配置多个合并按钮
 - Jenkins 触发：合并成功后可触发 Jenkins 构建（无需在 UI 配置）
+- 发布到测试环境：可选 Jenkins 触发的测试环境发布按钮
 - 需求分支创建：选择 feature/fix + 中文描述，自动翻译成英文并创建分支
 
 ## 使用方式
@@ -30,14 +31,6 @@
 
 ```jsonc
 {
-  // UI 按钮文案
-  "ui": {
-    "refreshLabel": "⟳",
-    "openConfigLabel": {
-      "zh": "打开配置文件",
-      "en": "Open Config File"
-    }
-  },
   // 需求分支创建设置（基于最新 release_YYYYMMDD 分支创建）
   "demandBranch": {
     "prefixes": ["feature", "fix"],
@@ -46,13 +39,25 @@
     "deepseekBaseUrl": "https://api.deepseek.com/v1",
     "deepseekModel": "deepseek-chat"
   },
+  // 发布到测试环境按钮配置
+  "deployToTest": {
+    "enabled": true,
+    "jenkins": {
+      "url": "https://jenkins.example.com",
+      "job": "team/release/deploy-test",
+      "user": "jenkins-user",
+      "apiToken": "jenkins-api-token",
+      "crumb": true,
+      "parameters": {
+        "BRANCH": "${currentBranch}",
+        "COMMIT": "${headCommit}",
+        "ENV": "${deployEnv}"
+      }
+    }
+  },
   "profiles": [
     {
       "id": "merge-main",
-      "label": {
-        "zh": "合并到 main",
-        "en": "Merge to main"
-      },
       "sourceBranch": "",
       "targetBranch": "main",
       "strategy": "default",
@@ -74,10 +79,6 @@
     },
     {
       "id": "merge-release",
-      "label": {
-        "zh": "合并到 release",
-        "en": "Merge to release"
-      },
       "sourceBranch": "",
       "targetBranch": "release",
       "strategy": "no-ff",
@@ -89,7 +90,6 @@
 
 ### 字段说明
 
-- `ui.refreshLabel` / `ui.openConfigLabel`：按钮文案（可选，支持 `{ "zh": "...", "en": "..." }`）
 - `demandBranch`：需求分支创建配置（可选）
 - 需求分支基于最新 `releasePrefix_YYYYMMDD` 分支创建（优先远端分支）；若未找到会提示选择当前仓库的分支作为基准
   - `prefixes`：需求分支前缀列表（默认 `["feature", "fix"]`）
@@ -98,14 +98,16 @@
   - `deepseekBaseUrl`：DeepSeek API 地址（默认 `https://api.deepseek.com/v1`）
   - `deepseekModel`：DeepSeek 模型名（默认 `deepseek-chat`）
 - `profiles`：合并配置列表（必须）
-  - `id`：配置唯一标识（按钮点击时使用）
-  - `label`：按钮文案（支持 `{ "zh": "...", "en": "..." }`）
+  - `id`：配置唯一标识（按钮点击时使用，同时作为按钮文案显示）
   - `sourceBranch`：源分支，留空默认当前分支
   - `targetBranch`：目标分支（必填）
   - `strategy`：`default` / `no-ff` / `ff-only`
   - `pushAfterMerge`：是否推送远端（默认 `true`）
   - `pushRemote`：远端名（默认 `origin`，没有则取第一个远端）
   - `jenkins`：Jenkins 触发配置（可选）
+- `deployToTest`：发布到测试环境按钮配置（可选，先合并再触发 Jenkins）
+  - `targetBranch`：合并目标分支（默认 `pre-test`）
+  - `jenkins`：Jenkins 触发配置
 
 ### Jenkins 配置
 
@@ -117,6 +119,8 @@
 - `crumb`：Jenkins 开启 CSRF 时设为 `true`
 - `parameters`：触发参数，支持变量：
   - `${sourceBranch}` `${targetBranch}` `${currentBranch}` `${mergeCommit}` `${strategy}` `${pushRemote}`
+- 发布到测试环境的参数也支持：
+  - `${currentBranch}` `${headCommit}` `${deployEnv}`（默认 `test`）
 
 ## 故障排查
 

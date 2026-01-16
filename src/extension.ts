@@ -6,17 +6,25 @@ import {
   readMergeConfig,
 } from "./config";
 import { getConfigGroup, getConfigGroups } from "./config-groups";
-import { getCurrentBranch, listBranches, listRemoteBranches, runGit } from "./git";
-import { getDefaultUiLabels, getLocale, t } from "./i18n";
+import {
+  getCurrentBranch,
+  getHeadCommit,
+  listBranches,
+  listRemoteBranches,
+  listRemotes,
+  runGit,
+} from "./git";
+import { getLocale, t } from "./i18n";
+import { triggerJenkinsBuild } from "./jenkins";
 import { loadMergePlan, performMerge } from "./merge";
 import { getWorkspaceRoot, resolveRepoRoot, resolveRepoRoots } from "./repo";
 import { state } from "./state";
-import { MergeConfigFile } from "./types";
+import { MergeConfigFile, ResolvedMergePlan } from "./types";
 import { getErrorMessage } from "./utils";
 import { getWebviewHtml } from "./webview";
 import { translateToEnglish } from "./deepseek";
 
-const DEMAND_MESSAGE_STORAGE_KEY = "quick-merge.demandMessages";
+const DEMAND_MESSAGE_STORAGE_KEY = "quick-merge-jenkins.demandMessages";
 
 export function activate(context: vscode.ExtensionContext): void {
   const provider = new QuickMergeViewProvider(context);
@@ -25,16 +33,17 @@ export function activate(context: vscode.ExtensionContext): void {
       QuickMergeViewProvider.viewType,
       provider
     ),
-    vscode.commands.registerCommand("quick-merge.refresh", () =>
+    vscode.commands.registerCommand("quick-merge-jenkins.refresh", () =>
       provider.refresh()
     ),
-    vscode.commands.registerCommand("quick-merge.openConflictFiles", () =>
-      provider.openConflictFiles()
+    vscode.commands.registerCommand(
+      "quick-merge-jenkins.openConflictFiles",
+      () => provider.openConflictFiles()
     ),
-    vscode.commands.registerCommand("quick-merge.openMergeEditor", () =>
+    vscode.commands.registerCommand("quick-merge-jenkins.openMergeEditor", () =>
       provider.openMergeEditor()
     ),
-    vscode.commands.registerCommand("quick-merge.openConfig", () =>
+    vscode.commands.registerCommand("quick-merge-jenkins.openConfig", () =>
       provider.openConfig()
     )
   );
@@ -73,6 +82,14 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
         await this.confirmMerge(message);
         return;
       }
+      if (message?.type === "deployTest") {
+        await this.handleDeployTest(message);
+        return;
+      }
+      if (message?.type === "confirmDeployTest") {
+        await this.confirmDeployTest(message);
+        return;
+      }
       if (message?.type === "commitDemand") {
         const repoRoot =
           typeof message?.repoRoot === "string" ? message.repoRoot : undefined;
@@ -95,6 +112,18 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
         const repoRoot =
           typeof message?.repoRoot === "string" ? message.repoRoot : undefined;
         await this.openConfig(repoRoot);
+        return;
+      }
+      if (message?.type === "confirmCommitAndDeploy") {
+        const repoRoot =
+          typeof message?.repoRoot === "string" ? message.repoRoot : undefined;
+        await this.confirmCommitAndDeploy(repoRoot);
+        return;
+      }
+      if (message?.type === "rebaseSquash") {
+        const repoRoot =
+          typeof message?.repoRoot === "string" ? message.repoRoot : undefined;
+        await this.handleRebaseSquash(repoRoot);
         return;
       }
       if (message?.type === "createDemandBranch") {
@@ -220,8 +249,8 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
     const openRoot = requestedRepoRoot
       ? requestedRepoRoot
       : activeRepoRoot && repoRoots.includes(activeRepoRoot)
-        ? activeRepoRoot
-        : repoRoots[0];
+      ? activeRepoRoot
+      : repoRoots[0];
     const openConfigInfo = await getConfigPathInfo(openRoot);
     const openUri = vscode.Uri.file(openConfigInfo.path);
     const doc = await vscode.workspace.openTextDocument(openUri);
@@ -274,7 +303,9 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
 
     try {
       const profileKey =
-        typeof message?.profileKey === "string" ? message.profileKey : undefined;
+        typeof message?.profileKey === "string"
+          ? message.profileKey
+          : undefined;
       const plan = await loadMergePlan(cwd, profileKey);
       const result = await performMerge(cwd, plan);
       if (result.status === "failed") {
@@ -339,6 +370,135 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
     await this.handleMerge(message);
   }
 
+  private async confirmDeployTest(message: any): Promise<void> {
+    const label =
+      typeof message?.label === "string" ? message.label.trim() : "";
+    const prompt = label
+      ? t("deployTestConfirmWithLabel", { label })
+      : t("deployTestConfirm");
+    const choice = await vscode.window.showInformationMessage(
+      prompt,
+      { modal: true },
+      t("confirm")
+    );
+    if (choice !== t("confirm")) {
+      return;
+    }
+    await this.handleDeployTest(message);
+  }
+
+  private async handleDeployTest(message: any): Promise<void> {
+    const requestedRoot =
+      typeof message?.repoRoot === "string" ? message.repoRoot : undefined;
+    const cwd = requestedRoot ?? (await resolveRepoRoot());
+    if (!cwd) {
+      this.postMessage({
+        type: "error",
+        message: t("workspaceMissingForMerge"),
+      });
+      return;
+    }
+    state.lastWorkspaceRoot = cwd;
+    this.postMessage({
+      type: "deployTestStarted",
+      message: t("deployTestStarted"),
+    });
+    try {
+      const configFile = await readMergeConfig(cwd);
+      const deployConfig = configFile.deployToTest;
+      if (!deployConfig) {
+        const errorMessage = t("deployTestMissingConfig");
+        this.postMessage({
+          type: "error",
+          message: errorMessage,
+        });
+        void vscode.window.showErrorMessage(errorMessage);
+        return;
+      }
+      const jenkins = deployConfig.jenkins;
+      if (!jenkins || !jenkins.url || !jenkins.job) {
+        const errorMessage = t("deployTestMissingConfig");
+        this.postMessage({
+          type: "error",
+          message: errorMessage,
+        });
+        void vscode.window.showErrorMessage(errorMessage);
+        return;
+      }
+
+      // 1. 获取当前分支和远端信息
+      const [currentBranch, remotes] = await Promise.all([
+        getCurrentBranch(cwd),
+        listRemotes(cwd),
+      ]);
+      if (!currentBranch) {
+        const errorMessage = t("currentBranchMissing");
+        this.postMessage({ type: "error", message: errorMessage });
+        void vscode.window.showErrorMessage(errorMessage);
+        return;
+      }
+
+      // 2. 构建合并计划：当前分支 -> 目标分支（默认 pre-test）
+      const targetBranch = (deployConfig.targetBranch ?? "pre-test").trim();
+      const pushRemote = remotes.length > 0 ? remotes[0] : null;
+      const plan: ResolvedMergePlan = {
+        currentBranch,
+        sourceBranch: currentBranch,
+        targetBranch,
+        strategyFlag: "",
+        strategyLabel: "default",
+        pushAfterMerge: Boolean(pushRemote),
+        pushRemote,
+        jenkins: undefined, // 合并时不触发 Jenkins，后面单独触发
+      };
+
+      // 3. 执行合并
+      const result = await performMerge(cwd, plan);
+      if (result.status === "failed") {
+        state.lastFailureContext = {
+          originalBranch: result.currentBranch,
+          targetBranch: result.targetBranch,
+          cwd,
+        };
+        state.lastConflictFiles = result.conflicts;
+        this.postMessage({ type: "result", result });
+        void vscode.window.showErrorMessage(
+          t("mergeFailed", { error: result.errorMessage })
+        );
+        return;
+      }
+
+      // 4. 合并成功后触发 Jenkins
+      const headCommit = result.headCommit;
+      await triggerJenkinsBuild(jenkins, {
+        currentBranch,
+        sourceBranch: currentBranch,
+        targetBranch,
+        mergeCommit: headCommit,
+        headCommit,
+        deployEnv: "test",
+      });
+
+      const successMessage = t("deployTestSuccess", { job: jenkins.job });
+      this.postMessage({
+        type: "info",
+        message: successMessage,
+      });
+      void vscode.window.showInformationMessage(successMessage);
+    } catch (error) {
+      const errorMessage = t("deployTestFailed", {
+        error: getErrorMessage(error),
+      });
+      this.postMessage({
+        type: "error",
+        message: errorMessage,
+      });
+      void vscode.window.showErrorMessage(errorMessage);
+    } finally {
+      await this.postState({ loadConfig: false });
+    }
+  }
+
   private async postState(options?: {
     loadConfig?: boolean;
     repoRoot?: string;
@@ -351,7 +511,6 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       state.lastConfigRootsKey = "";
       state.lastConfigGroups = [];
       state.lastConfigError = "";
-      state.lastUiLabels = getDefaultUiLabels();
       state.lastConfigLoaded = false;
       state.lastHasMissingConfig = false;
       this.postMessage({
@@ -360,7 +519,6 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
         configGroups: [],
         configSummary: [],
         configError: t("workspaceNotFound"),
-        uiLabels: getDefaultUiLabels(),
         configLoaded: false,
         hasMissingConfig: false,
       });
@@ -375,7 +533,6 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       state.lastConfigRootsKey = repoRootsKey;
       state.lastConfigGroups = [];
       state.lastConfigError = "";
-      state.lastUiLabels = getDefaultUiLabels();
       state.lastConfigLoaded = false;
       state.lastHasMissingConfig = false;
     }
@@ -385,7 +542,7 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
         : "";
       if (loadConfig) {
         if (shouldRefreshGroup && state.lastConfigLoaded) {
-          const { group, uiLabels } = await getConfigGroup(refreshRepoRoot);
+          const { group } = await getConfigGroup(refreshRepoRoot);
           const nextGroups = [...state.lastConfigGroups];
           const index = nextGroups.findIndex(
             (item) => item.repoRoot === refreshRepoRoot
@@ -396,18 +553,14 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
             nextGroups.push(group);
           }
           state.lastConfigGroups = nextGroups;
-          if (repoRoots.length === 1) {
-            state.lastUiLabels = uiLabels;
-          }
           state.lastConfigLoaded = true;
           state.lastHasMissingConfig = nextGroups.some(
             (item) => item && item.missingConfig
           );
         } else {
-          const { groups, error, uiLabels } = await getConfigGroups(repoRoots);
+          const { groups, error } = await getConfigGroups(repoRoots);
           state.lastConfigGroups = groups;
           state.lastConfigError = error;
-          state.lastUiLabels = uiLabels;
           state.lastConfigLoaded = true;
           state.lastHasMissingConfig = groups.some(
             (item) => item && item.missingConfig
@@ -420,7 +573,6 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
         configGroups: state.lastConfigGroups,
         configSummary: state.lastConfigGroups.flatMap((group) => group.items),
         configError: state.lastConfigError,
-        uiLabels: state.lastUiLabels,
         configLoaded: state.lastConfigLoaded,
         hasMissingConfig: state.lastHasMissingConfig,
       });
@@ -451,9 +603,7 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     const activeRepoRoot = await resolveRepoRoot();
-    const repoRoots = await resolveRepoRoots(
-      activeRepoRoot ?? workspaceRoot
-    );
+    const repoRoots = await resolveRepoRoots(activeRepoRoot ?? workspaceRoot);
     if (repoRoots.length === 0) {
       notifyError(t("workspaceMissingForMerge"));
       return;
@@ -487,8 +637,8 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
           prefix === "feature"
             ? t("demandTypeFeature")
             : prefix === "fix"
-              ? t("demandTypeFix")
-              : "",
+            ? t("demandTypeFix")
+            : "",
         value: prefix,
       })),
       { placeHolder: t("demandTypePlaceholder") }
@@ -620,9 +770,7 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     const activeRepoRoot = await resolveRepoRoot();
-    const repoRoots = await resolveRepoRoots(
-      activeRepoRoot ?? workspaceRoot
-    );
+    const repoRoots = await resolveRepoRoots(activeRepoRoot ?? workspaceRoot);
     if (repoRoots.length === 0) {
       notifyError(t("workspaceMissingForMerge"));
       return;
@@ -684,6 +832,215 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private async confirmCommitAndDeploy(repoRoot?: string): Promise<void> {
+    const notifyInfo = (message: string) => {
+      this.postMessage({ type: "info", message });
+      void vscode.window.showInformationMessage(message);
+    };
+    const notifyError = (message: string) => {
+      this.postMessage({ type: "error", message });
+      void vscode.window.showErrorMessage(message);
+    };
+    const workspaceRoot = getWorkspaceRoot();
+    if (!workspaceRoot) {
+      notifyError(t("workspaceOpenProject"));
+      return;
+    }
+    const activeRepoRoot = await resolveRepoRoot();
+    const repoRoots = await resolveRepoRoots(activeRepoRoot ?? workspaceRoot);
+    if (repoRoots.length === 0) {
+      notifyError(t("workspaceMissingForMerge"));
+      return;
+    }
+    const requestedRepoRoot =
+      repoRoot && repoRoots.includes(repoRoot) ? repoRoot : undefined;
+    if (repoRoot && !requestedRepoRoot) {
+      notifyError(t("repoNotFound"));
+      return;
+    }
+    const defaultRepoRoot =
+      activeRepoRoot && repoRoots.includes(activeRepoRoot)
+        ? activeRepoRoot
+        : repoRoots[0];
+    const cwd = requestedRepoRoot ?? defaultRepoRoot;
+
+    // 1. 获取提交信息
+    const storedDemandMessage = this.getDemandMessage(cwd);
+    let lastCommitMessage = "";
+    try {
+      lastCommitMessage = await this.getLastCommitMessage(cwd);
+    } catch {
+      lastCommitMessage = "";
+    }
+    const baseMessage = lastCommitMessage || storedDemandMessage;
+    if (!baseMessage || baseMessage.trim().length === 0) {
+      notifyError(t("demandMessageMissing"));
+      return;
+    }
+    const defaultMessage = this.buildNextCommitMessage(baseMessage);
+    const inputMessage = await vscode.window.showInputBox({
+      prompt: t("commitMessagePrompt"),
+      value: defaultMessage,
+      placeHolder: t("commitMessagePlaceholder"),
+      validateInput: (value) =>
+        value.trim().length === 0 ? t("commitMessageRequired") : undefined,
+    });
+    if (!inputMessage) {
+      return;
+    }
+    const commitMessage = inputMessage.trim();
+
+    // 2. 确认提交并发布
+    const choice = await vscode.window.showInformationMessage(
+      t("commitConfirm", { demandMessage: commitMessage }),
+      { modal: true },
+      t("confirm")
+    );
+    if (choice !== t("confirm")) {
+      return;
+    }
+
+    // 3. 执行提交
+    try {
+      await runGit(["add", "-A"], cwd);
+      const status = await runGit(["status", "--porcelain"], cwd);
+      if (!status.stdout.trim()) {
+        notifyInfo(t("commitNoChanges"));
+        return;
+      }
+      await runGit(["commit", "-m", commitMessage], cwd);
+      notifyInfo(t("commitSuccess", { message: commitMessage }));
+    } catch (error) {
+      notifyError(getErrorMessage(error));
+      return;
+    }
+
+    // 4. 执行 Deploy to Test
+    await this.handleDeployTest({ repoRoot: cwd });
+  }
+
+  private async handleRebaseSquash(repoRoot?: string): Promise<void> {
+    const notifyInfo = (message: string) => {
+      this.postMessage({ type: "info", message });
+      void vscode.window.showInformationMessage(message);
+    };
+    const notifyError = (message: string) => {
+      this.postMessage({ type: "error", message });
+      void vscode.window.showErrorMessage(message);
+    };
+    const workspaceRoot = getWorkspaceRoot();
+    if (!workspaceRoot) {
+      notifyError(t("workspaceOpenProject"));
+      return;
+    }
+    const activeRepoRoot = await resolveRepoRoot();
+    const repoRoots = await resolveRepoRoots(activeRepoRoot ?? workspaceRoot);
+    if (repoRoots.length === 0) {
+      notifyError(t("workspaceMissingForMerge"));
+      return;
+    }
+    const requestedRepoRoot =
+      repoRoot && repoRoots.includes(repoRoot) ? repoRoot : undefined;
+    if (repoRoot && !requestedRepoRoot) {
+      notifyError(t("repoNotFound"));
+      return;
+    }
+    const defaultRepoRoot =
+      activeRepoRoot && repoRoots.includes(activeRepoRoot)
+        ? activeRepoRoot
+        : repoRoots[0];
+    const cwd = requestedRepoRoot ?? defaultRepoRoot;
+
+    try {
+      // 0. 拉取最新代码
+      await runGit(["pull"], cwd);
+
+      // 1. 获取最近的 commit 历史（最多 50 条）
+      const logResult = await runGit(
+        ["log", "--oneline", "-n", "50", "--pretty=%H|%s"],
+        cwd
+      );
+      const lines = logResult.stdout
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+      if (lines.length < 2) {
+        notifyError(t("rebaseNoCommits"));
+        return;
+      }
+
+      // 2. 解析 commit 并找到最近一组连续的符合格式的 commit
+      const commits: { hash: string; message: string }[] = [];
+      for (const line of lines) {
+        const [hash, ...msgParts] = line.split("|");
+        commits.push({ hash, message: msgParts.join("|") });
+      }
+
+      // 3. 识别最近一组连续的符合格式的 commit
+      // 格式：基础信息 + 可选数字，如 "用户信息3"、"用户信息2"、"用户信息1"、"用户信息"
+      const getBaseMessage = (msg: string): string => {
+        const match = msg.match(/^(.*?)(\d*)$/);
+        return match ? match[1] : msg;
+      };
+
+      const preSelectedIndices: number[] = [];
+      if (commits.length > 0) {
+        const firstBase = getBaseMessage(commits[0].message);
+        if (firstBase) {
+          for (let i = 0; i < commits.length; i++) {
+            const base = getBaseMessage(commits[i].message);
+            if (base === firstBase) {
+              preSelectedIndices.push(i);
+            } else {
+              break; // 遇到不同的基础信息就停止
+            }
+          }
+        }
+      }
+
+      // 至少需要 2 个 commit 才能合并
+      if (preSelectedIndices.length < 2) {
+        preSelectedIndices.length = 0;
+      }
+
+      // 4. 显示多选列表
+      const items: vscode.QuickPickItem[] = commits.map((c, i) => ({
+        label: c.message,
+        description: c.hash.substring(0, 7),
+        picked: preSelectedIndices.includes(i),
+      }));
+
+      const selected = await vscode.window.showQuickPick(items, {
+        canPickMany: true,
+        placeHolder: t("rebaseSelectCommits"),
+      });
+
+      if (!selected || selected.length < 2) {
+        return;
+      }
+
+      // 5. 找到选中的 commit 索引范围
+      const selectedIndices = selected.map((s) =>
+        items.findIndex((item) => item === s)
+      );
+      const maxIndex = Math.max(...selectedIndices);
+      const count = maxIndex + 1;
+
+      // 6. 获取基础提交信息
+      const baseMessage = getBaseMessage(commits[0].message);
+
+      // 7. 执行 git reset --soft 和 git commit
+      const resetTarget = `HEAD~${count}`;
+      await runGit(["reset", "--soft", resetTarget], cwd);
+      await runGit(["commit", "-m", baseMessage], cwd);
+
+      notifyInfo(t("rebaseSuccess", { count: String(count) }));
+    } catch (error) {
+      notifyError(t("rebaseFailed", { error: getErrorMessage(error) }));
+    }
+  }
+
   private getDemandMessage(repoRoot: string): string {
     const stored =
       this.context.workspaceState.get<Record<string, string>>(
@@ -708,10 +1065,7 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       [repoRoot]: trimmed,
     };
     state.lastDemandMessages = next;
-    await this.context.workspaceState.update(
-      DEMAND_MESSAGE_STORAGE_KEY,
-      next
-    );
+    await this.context.workspaceState.update(DEMAND_MESSAGE_STORAGE_KEY, next);
   }
 
   private async getLastCommitMessage(cwd: string): Promise<string> {
@@ -779,7 +1133,7 @@ function getDeepseekSettings(): {
   baseUrl: string;
   model: string;
 } {
-  const config = vscode.workspace.getConfiguration("quick-merge");
+  const config = vscode.workspace.getConfiguration("quick-merge-jenkins");
   const apiKey = (config.get<string>("deepseekApiKey") ?? "").trim();
   const baseUrl = (config.get<string>("deepseekBaseUrl") ?? "").trim();
   const model =
@@ -797,15 +1151,13 @@ function resolveDemandBranchSettings(configFile: MergeConfigFile | null): {
 } {
   const fallback = getDeepseekSettings();
   const demandConfig = configFile?.demandBranch;
-  const apiKey = (demandConfig?.deepseekApiKey ?? fallback.apiKey).trim();
-  const baseUrl = (demandConfig?.deepseekBaseUrl ?? fallback.baseUrl).trim();
-  const model =
-    (demandConfig?.deepseekModel ?? fallback.model).trim() || "deepseek-chat";
+  const apiKey = (demandConfig?.deepseekApiKey ?? "").trim() || fallback.apiKey;
+  const baseUrl =
+    (demandConfig?.deepseekBaseUrl ?? "").trim() || fallback.baseUrl;
+  const model = (demandConfig?.deepseekModel ?? "").trim() || fallback.model;
   const hasCustomPrefixes = Array.isArray(demandConfig?.prefixes);
   const customPrefixes = normalizePrefixes(demandConfig?.prefixes ?? []);
-  const prefixes = hasCustomPrefixes
-    ? customPrefixes
-    : DEFAULT_DEMAND_PREFIXES;
+  const prefixes = hasCustomPrefixes ? customPrefixes : DEFAULT_DEMAND_PREFIXES;
   const releasePrefix = normalizeReleasePrefix(demandConfig?.releasePrefix);
   return { apiKey, baseUrl, model, prefixes, releasePrefix };
 }

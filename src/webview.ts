@@ -178,6 +178,19 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       font-size: 0.9em;
     }
 
+    .config-group-deploy {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .config-group-deploy button {
+      width: 100%;
+      padding: 6px 10px;
+      font-size: 0.9em;
+    }
+
     .footer-actions button.icon-button,
     .config-group-actions button.icon-button {
       font-size: 1.6em;
@@ -398,6 +411,32 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         vscode.postMessage({ type: 'createDemandBranch', repoRoot });
       });
       actionsEl.appendChild(demandBtn);
+
+      const rebaseBtn = document.createElement('button');
+      rebaseBtn.className = 'secondary';
+      rebaseBtn.textContent = i18n.rebaseSquash;
+      rebaseBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'rebaseSquash', repoRoot });
+      });
+      actionsEl.appendChild(rebaseBtn);
+
+      container.appendChild(actionsEl);
+    }
+
+    function appendDeployButton(container, repoRoot, deployInfo) {
+      if (!repoRoot) {
+        return;
+      }
+      const deployMeta = deployInfo || {
+        label: i18n.deployTestLabel,
+        enabled: false,
+        error: i18n.deployTestMissingConfig,
+      };
+      const canClick = deployMeta.enabled || Boolean(deployMeta.error);
+      const actionsEl = document.createElement('div');
+      actionsEl.className = 'config-group-deploy';
+
+      // 提交代码按钮
       const commitBtn = document.createElement('button');
       commitBtn.className = 'secondary';
       commitBtn.textContent = i18n.demandCommit;
@@ -405,6 +444,48 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         vscode.postMessage({ type: 'commitDemand', repoRoot });
       });
       actionsEl.appendChild(commitBtn);
+
+      // Deploy to test 按钮
+      const deployBtn = document.createElement('button');
+      deployBtn.className = 'secondary';
+      deployBtn.textContent = deployMeta.label || i18n.deployTestLabel;
+      if (!canClick) {
+        deployBtn.disabled = true;
+      }
+      if (deployMeta.error) {
+        deployBtn.title = deployMeta.error;
+      }
+      deployBtn.addEventListener('click', () => {
+        if (!canClick) {
+          return;
+        }
+        const label = deployBtn.textContent || i18n.deployTestLabel;
+        if (!deployMeta.enabled) {
+          vscode.postMessage({ type: 'deployTest', repoRoot, label });
+          return;
+        }
+        vscode.postMessage({ type: 'confirmDeployTest', repoRoot, label });
+      });
+      actionsEl.appendChild(deployBtn);
+
+      // Commit & Deploy to test 按钮
+      const commitAndDeployBtn = document.createElement('button');
+      commitAndDeployBtn.className = 'secondary';
+      commitAndDeployBtn.textContent = i18n.commitAndDeploy;
+      if (!canClick) {
+        commitAndDeployBtn.disabled = true;
+      }
+      if (deployMeta.error) {
+        commitAndDeployBtn.title = deployMeta.error;
+      }
+      commitAndDeployBtn.addEventListener('click', () => {
+        if (!canClick) {
+          return;
+        }
+        vscode.postMessage({ type: 'confirmCommitAndDeploy', repoRoot });
+      });
+      actionsEl.appendChild(commitAndDeployBtn);
+
       container.appendChild(actionsEl);
     }
 
@@ -412,7 +493,6 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       const groups = Array.isArray(data.configGroups) ? data.configGroups : [];
       const items = Array.isArray(data.configSummary) ? data.configSummary : [];
       const error = data.configError || '';
-      const uiLabels = data.uiLabels || {};
       const configLoaded = Boolean(data.configLoaded);
       const missingGroups = groups.filter((group) => group && group.missingConfig);
       const hasMissingConfig = missingGroups.length > 0;
@@ -423,12 +503,11 @@ export function getWebviewHtml(webview: vscode.Webview): string {
           vscode.postMessage({ type: 'openConfig' });
         }
       }
-      const refreshLabel = uiLabels.refreshLabel || '⟳';
-      const isIconLabel = refreshLabel === '⟳';
+      const refreshLabel = '⟳';
       refreshBtn.textContent = refreshLabel;
-      refreshBtn.title = isIconLabel ? i18n.refreshTitle : refreshLabel;
-      refreshBtn.setAttribute('aria-label', isIconLabel ? i18n.refreshTitle : refreshLabel);
-      refreshBtn.classList.toggle('icon-button', isIconLabel);
+      refreshBtn.title = i18n.refreshTitle;
+      refreshBtn.setAttribute('aria-label', i18n.refreshTitle);
+      refreshBtn.classList.add('icon-button');
       configListEl.innerHTML = '';
       if (error) {
         const errorEl = document.createElement('div');
@@ -479,12 +558,12 @@ export function getWebviewHtml(webview: vscode.Webview): string {
           const refreshGroupBtn = document.createElement('button');
           refreshGroupBtn.className = 'secondary';
           refreshGroupBtn.textContent = refreshLabel;
-          refreshGroupBtn.title = isIconLabel ? i18n.refreshTitle : refreshLabel;
+          refreshGroupBtn.title = i18n.refreshTitle;
           refreshGroupBtn.setAttribute(
             'aria-label',
-            isIconLabel ? i18n.refreshTitle : refreshLabel
+            i18n.refreshTitle
           );
-          refreshGroupBtn.classList.toggle('icon-button', isIconLabel);
+          refreshGroupBtn.classList.add('icon-button');
           refreshGroupBtn.addEventListener('click', () => {
             vscode.postMessage({
               type: 'refreshRepo',
@@ -496,6 +575,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         }
         groupEl.appendChild(headerEl);
         appendDemandButton(groupEl, group.repoRoot);
+        appendDeployButton(groupEl, group.repoRoot, group.deployToTest);
         if (group.error) {
           const groupError = document.createElement('div');
           groupError.className = 'config-group-error';
@@ -544,12 +624,12 @@ export function getWebviewHtml(webview: vscode.Webview): string {
             const refreshGroupBtn = document.createElement('button');
             refreshGroupBtn.className = 'secondary';
             refreshGroupBtn.textContent = refreshLabel;
-            refreshGroupBtn.title = isIconLabel ? i18n.refreshTitle : refreshLabel;
+            refreshGroupBtn.title = i18n.refreshTitle;
             refreshGroupBtn.setAttribute(
               'aria-label',
-              isIconLabel ? i18n.refreshTitle : refreshLabel
+              i18n.refreshTitle
             );
-            refreshGroupBtn.classList.toggle('icon-button', isIconLabel);
+            refreshGroupBtn.classList.add('icon-button');
             refreshGroupBtn.addEventListener('click', () => {
               vscode.postMessage({
                 type: 'refreshRepo',
@@ -561,6 +641,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
           }
           groupEl.appendChild(headerEl);
           appendDemandButton(groupEl, group.repoRoot);
+          appendDeployButton(groupEl, group.repoRoot, group.deployToTest);
           if (group.error) {
             const groupError = document.createElement('div');
             groupError.className = 'config-group-error';
@@ -711,6 +792,11 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       }
       if (message.type === 'mergeStarted') {
         setStatus(message.message || i18n.mergeInProgress, 'info');
+        setBusy(true);
+        return;
+      }
+      if (message.type === 'deployTestStarted') {
+        setStatus(message.message || i18n.deployTestInProgress, 'info');
         setBusy(true);
         return;
       }

@@ -1,12 +1,4 @@
 {
-  // UI 按钮文案
-  "ui": {
-    "refreshLabel": "⟳",
-    "openConfigLabel": {
-      "zh": "打开配置文件",
-      "en": "Open Config File"
-    }
-  },
   // 需求分支创建设置（基于最新 release_YYYYMMDD 分支创建）
   "demandBranch": {
     "prefixes": ["feature", "fix"],
@@ -15,13 +7,26 @@
     "deepseekBaseUrl": "https://api.deepseek.com/v1",
     "deepseekModel": "deepseek-chat"
   },
+  // 发布到测试环境按钮配置（先合并到 targetBranch，再触发 Jenkins）
+  "deployToTest": {
+    "targetBranch": "pre-test",
+    "jenkins": {
+      "url": "https://jenkins.example.com",
+      "job": "team/release/deploy-test",
+      "token": "",
+      "user": "",
+      "apiToken": "",
+      "crumb": true,
+      "parameters": {
+        "BRANCH": "${currentBranch}",
+        "COMMIT": "${headCommit}",
+        "ENV": "${deployEnv}"
+      }
+    }
+  },
   "profiles": [
     {
       "id": "merge-main",
-      "label": {
-        "zh": "合并到 main",
-        "en": "Merge to main"
-      },
       "sourceBranch": "",
       "targetBranch": "main",
       "strategy": "default",
@@ -44,10 +49,6 @@
     },
     {
       "id": "merge-release",
-      "label": {
-        "zh": "合并到 release",
-        "en": "Merge to release"
-      },
       "sourceBranch": "",
       "targetBranch": "release",
       "strategy": "no-ff",

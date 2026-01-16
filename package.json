@@ -37,38 +37,38 @@
     },
     "commands": [
       {
-        "command": "quick-merge.refresh",
+        "command": "quick-merge-jenkins.refresh",
         "title": "%command.refresh%"
       },
       {
-        "command": "quick-merge.openConflictFiles",
+        "command": "quick-merge-jenkins.openConflictFiles",
         "title": "%command.openConflictFiles%"
       },
       {
-        "command": "quick-merge.openMergeEditor",
+        "command": "quick-merge-jenkins.openMergeEditor",
         "title": "%command.openMergeEditor%"
       },
       {
-        "command": "quick-merge.openConfig",
+        "command": "quick-merge-jenkins.openConfig",
         "title": "%command.openConfig%"
       }
     ],
     "configuration": {
       "title": "%configuration.title%",
       "properties": {
-        "quick-merge.deepseekApiKey": {
+        "quick-merge-jenkins.deepseekApiKey": {
           "type": "string",
           "default": "",
           "markdownDescription": "%config.deepseekApiKey%",
           "scope": "machine"
         },
-        "quick-merge.deepseekBaseUrl": {
+        "quick-merge-jenkins.deepseekBaseUrl": {
           "type": "string",
           "default": "https://api.deepseek.com/v1",
           "markdownDescription": "%config.deepseekBaseUrl%",
           "scope": "machine"
         },
-        "quick-merge.deepseekModel": {
+        "quick-merge-jenkins.deepseekModel": {
           "type": "string",
           "default": "deepseek-chat",
           "markdownDescription": "%config.deepseekModel%",

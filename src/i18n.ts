@@ -1,7 +1,5 @@
 import * as vscode from "vscode";
 
-import { LocalizedString, UiLabels } from "./types";
-
 type Locale = "zh" | "en";
 
 const MESSAGES = {
@@ -11,17 +9,34 @@ const MESSAGES = {
     zh: "确认执行合并：{label}？",
     en: "Confirm merge: {label}?",
   },
-  branchNamePrompt: { zh: "确认或修改分支名", en: "Confirm or edit branch name" },
+  deployTestConfirm: {
+    zh: "确认发布到测试环境？",
+    en: "Confirm deploy to test?",
+  },
+  deployTestConfirmWithLabel: {
+    zh: "确认发布到测试环境：{label}？",
+    en: "Confirm deploy to test: {label}?",
+  },
+  branchNamePrompt: {
+    zh: "确认或修改分支名",
+    en: "Confirm or edit branch name",
+  },
   branchNamePlaceholder: {
     zh: "例如：fix_change_api_20260115",
     en: "e.g. fix_change_api_20260115",
   },
-  branchNameRequired: { zh: "分支名不能为空。", en: "Branch name is required." },
+  branchNameRequired: {
+    zh: "分支名不能为空。",
+    en: "Branch name is required.",
+  },
   branchConfirm: {
     zh: "确认创建分支：{branchName}",
     en: "Confirm create branch: {branchName}",
   },
-  baseBranchDetail: { zh: "基于分支：{baseBranch}", en: "Base branch: {baseBranch}" },
+  baseBranchDetail: {
+    zh: "基于分支：{baseBranch}",
+    en: "Base branch: {baseBranch}",
+  },
   commitConfirm: {
     zh: "确认提交代码？提交信息：{demandMessage}",
     en: "Confirm commit? Message: {demandMessage}",
@@ -145,7 +160,10 @@ const MESSAGES = {
     zh: "Jenkins Crumb 返回数据无效。",
     en: "Invalid Jenkins crumb response.",
   },
-  jenkinsJobEmpty: { zh: "Jenkins job 不能为空。", en: "Jenkins job is required." },
+  jenkinsJobEmpty: {
+    zh: "Jenkins job 不能为空。",
+    en: "Jenkins job is required.",
+  },
   deepseekRequestFailed: {
     zh: "DeepSeek 请求失败：{error}",
     en: "DeepSeek request failed: {error}",
@@ -216,6 +234,22 @@ const MESSAGES = {
     en: "Merge completed with failures: {target}",
   },
   mergeFailed: { zh: "合并失败：{error}", en: "Merge failed: {error}" },
+  deployTestStarted: {
+    zh: "正在发布到测试环境...",
+    en: "Deploying to test...",
+  },
+  deployTestSuccess: {
+    zh: "已触发测试环境发布：{job}",
+    en: "Triggered test deploy: {job}",
+  },
+  deployTestFailed: {
+    zh: "发布到测试环境失败：{error}",
+    en: "Test deploy failed: {error}",
+  },
+  deployTestMissingConfig: {
+    zh: "测试环境发布配置缺少 Jenkins 信息。",
+    en: "Test deploy config missing Jenkins info.",
+  },
   workspaceNotFound: { zh: "未找到工作区。", en: "Workspace not found." },
   workspaceOpenProject: {
     zh: "未找到工作区，请先打开项目。",
@@ -228,7 +262,10 @@ const MESSAGES = {
   demandTypeFeature: { zh: "新增功能", en: "New feature" },
   demandTypeFix: { zh: "修复问题", en: "Bug fix" },
   demandTypePlaceholder: { zh: "选择需求类型", en: "Select demand type" },
-  demandDescPrompt: { zh: "请输入需求描述（中文）", en: "Enter demand description" },
+  demandDescPrompt: {
+    zh: "请输入需求描述（中文）",
+    en: "Enter demand description",
+  },
   demandDescPlaceholder: {
     zh: "例如：修改接口返回字段",
     en: "e.g. update API response fields",
@@ -266,6 +303,22 @@ const MESSAGES = {
     zh: "未找到需求描述，请先创建需求分支。",
     en: "No demand description found; create a demand branch first.",
   },
+  rebaseSelectCommits: {
+    zh: "选择要合并的提交",
+    en: "Select commits to squash",
+  },
+  rebaseNoCommits: {
+    zh: "没有可合并的提交。",
+    en: "No commits to squash.",
+  },
+  rebaseSuccess: {
+    zh: "成功合并 {count} 个提交。",
+    en: "Squashed {count} commits.",
+  },
+  rebaseFailed: {
+    zh: "变基失败: {error}",
+    en: "Rebase failed: {error}",
+  },
   commitNoChanges: {
     zh: "没有可提交的变更。",
     en: "No changes to commit.",
@@ -289,8 +342,11 @@ const MESSAGES = {
     en: "Stay on target (resolve conflicts)",
   },
   mergeDefaultLabel: { zh: "执行合并", en: "Run merge" },
+  deployTestLabel: { zh: "发布到测试环境", en: "Deploy to test" },
   demandCreate: { zh: "创建需求分支", en: "Create demand branch" },
   demandCommit: { zh: "提交代码", en: "Commit changes" },
+  rebaseSquash: { zh: "变基合并", en: "Squash commits" },
+  commitAndDeploy: { zh: "提交并发布到测试", en: "Commit & Deploy to test" },
   refreshHint: {
     zh: "请点击刷新图标读取配置，若无配置会自动创建。",
     en: "Click refresh to load config; if missing, it will be created.",
@@ -381,34 +437,6 @@ export function t(key: MessageKey, params?: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, name) => params[name] ?? "");
 }
 
-export function resolveLocalizedString(
-  value?: LocalizedString,
-  fallback = ""
-): string {
-  if (typeof value === "string") {
-    return value;
-  }
-  if (value && typeof value === "object") {
-    const locale = getLocale();
-    const localized = value[locale];
-    if (typeof localized === "string" && localized.trim().length > 0) {
-      return localized;
-    }
-    const secondary = locale === "zh" ? value.en : value.zh;
-    if (typeof secondary === "string" && secondary.trim().length > 0) {
-      return secondary;
-    }
-  }
-  return fallback;
-}
-
-export function getDefaultUiLabels(): UiLabels {
-  return {
-    refreshLabel: "⟳",
-    openConfigLabel: t("openConfigLabel"),
-  };
-}
-
 export interface WebviewStrings {
   refreshTitle: string;
   mergeResultTitle: string;
@@ -420,6 +448,8 @@ export interface WebviewStrings {
   mergeDefaultLabel: string;
   demandCreate: string;
   demandCommit: string;
+  rebaseSquash: string;
+  commitAndDeploy: string;
   refreshHint: string;
   gitProjectLabel: string;
   missingConfigHint: string;
@@ -446,6 +476,9 @@ export interface WebviewStrings {
   conflictFilesLabel: string;
   stayOnTargetStatus: string;
   mergeInProgress: string;
+  deployTestLabel: string;
+  deployTestInProgress: string;
+  deployTestMissingConfig: string;
   genericError: string;
   configErrorMessage: string;
   listSeparator: string;
@@ -461,8 +494,11 @@ export function getWebviewStrings(): WebviewStrings {
     checkoutOriginal: t("checkoutOriginal"),
     stayOnTarget: t("stayOnTarget"),
     mergeDefaultLabel: t("mergeDefaultLabel"),
+    deployTestLabel: t("deployTestLabel"),
     demandCreate: t("demandCreate"),
     demandCommit: t("demandCommit"),
+    rebaseSquash: t("rebaseSquash"),
+    commitAndDeploy: t("commitAndDeploy"),
     refreshHint: t("refreshHint"),
     gitProjectLabel: t("gitProjectLabel"),
     missingConfigHint: t("missingConfigHint"),
@@ -489,6 +525,8 @@ export function getWebviewStrings(): WebviewStrings {
     conflictFilesLabel: t("conflictFilesLabel"),
     stayOnTargetStatus: t("stayOnTargetStatus"),
     mergeInProgress: t("mergeStarted"),
+    deployTestInProgress: t("deployTestStarted"),
+    deployTestMissingConfig: t("deployTestMissingConfig"),
     genericError: t("genericError"),
     configErrorMessage: t("configErrorMessage"),
     listSeparator: t("listSeparator"),
