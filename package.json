@@ -1,7 +1,7 @@
 {
   "name": "quick-merge-jenkins",
-  "displayName": "Quick Merge Jenkins",
-  "description": "Config-driven merge helper with Jenkins trigger support",
+  "displayName": "%displayName%",
+  "description": "%description%",
   "version": "1.0.3",
   "publisher": "leesama-tools",
   "engines": {
@@ -21,7 +21,7 @@
       "activitybar": [
         {
           "id": "quickMergeContainer",
-          "title": "Quick Merge Jenkins",
+          "title": "%viewTitle%",
           "icon": "media/quick-merge.svg"
         }
       ]
@@ -30,7 +30,7 @@
       "quickMergeContainer": [
         {
           "id": "quickMergeView",
-          "name": "Quick Merge Jenkins",
+          "name": "%viewName%",
           "type": "webview"
         }
       ]
@@ -38,21 +38,44 @@
     "commands": [
       {
         "command": "quick-merge.refresh",
-        "title": "Quick Merge Jenkins: Refresh Config"
+        "title": "%command.refresh%"
       },
       {
         "command": "quick-merge.openConflictFiles",
-        "title": "Quick Merge Jenkins: Open Conflict Files"
+        "title": "%command.openConflictFiles%"
       },
       {
         "command": "quick-merge.openMergeEditor",
-        "title": "Quick Merge Jenkins: Open Merge Editor"
+        "title": "%command.openMergeEditor%"
       },
       {
         "command": "quick-merge.openConfig",
-        "title": "Quick Merge Jenkins: Open Config File"
+        "title": "%command.openConfig%"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "%configuration.title%",
+      "properties": {
+        "quick-merge.deepseekApiKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.deepseekApiKey%",
+          "scope": "machine"
+        },
+        "quick-merge.deepseekBaseUrl": {
+          "type": "string",
+          "default": "https://api.deepseek.com/v1",
+          "markdownDescription": "%config.deepseekBaseUrl%",
+          "scope": "machine"
+        },
+        "quick-merge.deepseekModel": {
+          "type": "string",
+          "default": "deepseek-chat",
+          "markdownDescription": "%config.deepseekModel%",
+          "scope": "machine"
+        }
+      }
+    }
   },
   "scripts": {
     "compile": "tsc -p ./",

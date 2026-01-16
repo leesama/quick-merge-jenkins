@@ -1,0 +1,14 @@
+{
+  "displayName": "Quick Merge Jenkins",
+  "description": "Config-driven merge helper with Jenkins trigger support",
+  "viewTitle": "Quick Merge Jenkins",
+  "viewName": "Quick Merge Jenkins",
+  "command.refresh": "Quick Merge Jenkins: Refresh Config",
+  "command.openConflictFiles": "Quick Merge Jenkins: Open Conflict Files",
+  "command.openMergeEditor": "Quick Merge Jenkins: Open Merge Editor",
+  "command.openConfig": "Quick Merge Jenkins: Open Config File",
+  "configuration.title": "Quick Merge Jenkins",
+  "config.deepseekApiKey": "DeepSeek API Key used to translate demand descriptions.",
+  "config.deepseekBaseUrl": "DeepSeek API base URL, default includes /v1.",
+  "config.deepseekModel": "DeepSeek model name."
+}

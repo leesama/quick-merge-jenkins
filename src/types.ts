@@ -2,6 +2,8 @@ export type MergeStrategy = "" | "--no-ff" | "--ff-only";
 
 export type MergeResult = MergeSuccess | MergeFailure;
 
+export type LocalizedString = string | { zh?: string; en?: string };
+
 export interface MergeSuccess {
   status: "success";
   currentBranch: string;
@@ -41,13 +43,14 @@ export interface MergeConfig {
 export interface MergeConfigFile {
   ui?: UiLabels;
   buttons?: UiLabels;
+  demandBranch?: DemandBranchConfig;
   profiles?: MergeProfile[];
 }
 
 export interface MergeProfile extends MergeConfig {
   id?: string;
-  label?: string;
-  description?: string;
+  label?: LocalizedString;
+  description?: LocalizedString;
 }
 
 export interface JenkinsConfig {
@@ -87,6 +90,14 @@ export interface ConfigGroup {
 }
 
 export interface UiLabels {
-  refreshLabel?: string;
-  openConfigLabel?: string;
+  refreshLabel?: LocalizedString;
+  openConfigLabel?: LocalizedString;
+}
+
+export interface DemandBranchConfig {
+  prefixes?: string[];
+  releasePrefix?: string;
+  deepseekApiKey?: string;
+  deepseekBaseUrl?: string;
+  deepseekModel?: string;
 }

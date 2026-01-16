@@ -1,10 +1,20 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
+import { t } from "./i18n";
+
 const execFileAsync = promisify(execFile);
 
 export async function listBranches(cwd: string): Promise<string[]> {
   const result = await runGit(["branch", "--format=%(refname:short)"], cwd);
+  return result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+export async function listRemoteBranches(cwd: string): Promise<string[]> {
+  const result = await runGit(["branch", "-r", "--format=%(refname:short)"], cwd);
   return result.stdout
     .split("\n")
     .map((line) => line.trim())
@@ -80,7 +90,7 @@ export async function runGit(
   } catch (error: any) {
     const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : "";
     const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : "";
-    const message = stderr || stdout || error?.message || "Git 命令执行失败。";
+    const message = stderr || stdout || error?.message || t("gitCommandFailed");
     const err = new Error(message);
     (err as any).stderr = stderr;
     (err as any).stdout = stdout;

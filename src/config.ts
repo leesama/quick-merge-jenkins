@@ -1,7 +1,9 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import { CONFIG_FILE_NAME, DEFAULT_UI_LABELS } from "./constants";
+import { CONFIG_FILE_NAME, LEGACY_CONFIG_FILE_NAME } from "./constants";
+import { getDefaultUiLabels, resolveLocalizedString, t } from "./i18n";
+import { pathExists } from "./repo";
 import {
   MergeConfigFile,
   MergeProfile,
@@ -11,21 +13,37 @@ import {
 } from "./types";
 
 export async function readMergeConfig(cwd: string): Promise<MergeConfigFile> {
-  const configUri = vscode.Uri.file(path.join(cwd, CONFIG_FILE_NAME));
+  const configInfo = await getConfigPathInfo(cwd);
+  if (!configInfo.exists) {
+    throw new Error(
+      t("configFileNotFound", {
+        configFile: CONFIG_FILE_NAME,
+        legacyFile: LEGACY_CONFIG_FILE_NAME,
+      })
+    );
+  }
+  const configLabel = path.basename(configInfo.path);
+  const configUri = vscode.Uri.file(configInfo.path);
   let content: Uint8Array;
   try {
     content = await vscode.workspace.fs.readFile(configUri);
   } catch {
-    throw new Error(`未找到配置文件 ${CONFIG_FILE_NAME}。`);
+    throw new Error(
+      t("configFileNotFound", {
+        configFile: CONFIG_FILE_NAME,
+        legacyFile: LEGACY_CONFIG_FILE_NAME,
+      })
+    );
   }
   try {
-    const parsed = JSON.parse(Buffer.from(content).toString("utf8"));
+    const raw = Buffer.from(content).toString("utf8");
+    const parsed = JSON.parse(stripJsonComments(raw));
     if (!parsed || typeof parsed !== "object") {
-      throw new Error("配置内容必须是 JSON 对象。");
+      throw new Error(t("configMustBeObject"));
     }
     return parsed as MergeConfigFile;
   } catch {
-    throw new Error(`配置文件 ${CONFIG_FILE_NAME} 解析失败。`);
+    throw new Error(t("configParseFailed", { configLabel }));
   }
 }
 
@@ -35,16 +53,25 @@ export function normalizeConfigFile(configFile: MergeConfigFile): {
 } {
   const uiLabels = normalizeUiLabels(configFile.ui ?? configFile.buttons);
   if (!Array.isArray(configFile.profiles) || configFile.profiles.length === 0) {
-    throw new Error("配置文件必须包含 profiles。");
+    throw new Error(t("configMustHaveProfiles"));
   }
   const profiles = configFile.profiles;
   return { uiLabels, profiles };
 }
 
 export function normalizeUiLabels(input?: UiLabels): UiLabels {
+  const defaults = getDefaultUiLabels();
+  const defaultRefresh = resolveLocalizedString(defaults.refreshLabel, "⟳");
+  const defaultOpenConfig = resolveLocalizedString(
+    defaults.openConfigLabel,
+    t("openConfigLabel")
+  );
   return {
-    refreshLabel: input?.refreshLabel || DEFAULT_UI_LABELS.refreshLabel,
-    openConfigLabel: input?.openConfigLabel || DEFAULT_UI_LABELS.openConfigLabel,
+    refreshLabel: resolveLocalizedString(input?.refreshLabel, defaultRefresh),
+    openConfigLabel: resolveLocalizedString(
+      input?.openConfigLabel,
+      defaultOpenConfig
+    ),
   };
 }
 
@@ -53,13 +80,13 @@ export function selectProfile(
   profileKey?: string
 ): MergeProfile {
   if (profiles.length === 0) {
-    throw new Error("没有可用的合并配置。");
+    throw new Error(t("noMergeProfiles"));
   }
   if (!profileKey) {
     if (profiles.length === 1) {
       return profiles[0];
     }
-    throw new Error("未指定合并配置。");
+    throw new Error(t("mergeProfileUnspecified"));
   }
   const byId = profiles.find((profile) => profile.id?.trim() === profileKey);
   if (byId) {
@@ -69,7 +96,7 @@ export function selectProfile(
   if (Number.isInteger(index) && index >= 0 && index < profiles.length) {
     return profiles[index];
   }
-  throw new Error("未找到匹配的合并配置。");
+  throw new Error(t("mergeProfileNotFound"));
 }
 
 export function getProfileKey(profile: MergeProfile, index: number): string {
@@ -81,22 +108,22 @@ export function getProfileKey(profile: MergeProfile, index: number): string {
 }
 
 export function getProfileLabel(profile: MergeProfile, index: number): string {
-  const label = (profile.label ?? "").trim();
-  if (label) {
-    return label;
+  const localized = resolveLocalizedString(profile.label).trim();
+  if (localized) {
+    return localized;
   }
   const id = (profile.id ?? "").trim();
   if (id) {
     return id;
   }
-  return `合并配置 ${index + 1}`;
+  return t("mergeProfileLabel", { index: String(index + 1) });
 }
 
 export function planLabel(label: string, plan: ResolvedMergePlan): string {
   if (label) {
     return label;
   }
-  return `${plan.sourceBranch} -> ${plan.targetBranch}`;
+  return t("mergeToLabel", { branch: plan.targetBranch });
 }
 
 export function normalizeStrategy(value?: string): {
@@ -117,63 +144,103 @@ export function normalizeStrategy(value?: string): {
   ) {
     return { flag: "--ff-only", label: "--ff-only" };
   }
-  throw new Error("合并策略无效。");
+  throw new Error(t("mergeStrategyInvalid"));
 }
 
 export function buildConfigSummary(plan: ResolvedMergePlan): string[] {
   const lines = [
-    `源分支: ${plan.sourceBranch}`,
-    `目标分支: ${plan.targetBranch}`,
-    `合并策略: ${plan.strategyLabel}`,
-    `推送远端: ${plan.pushAfterMerge ? plan.pushRemote ?? "-" : "不推送"}`,
+    t("summarySourceBranch", { branch: plan.sourceBranch }),
+    t("summaryTargetBranch", { branch: plan.targetBranch }),
+    t("summaryStrategy", { strategy: plan.strategyLabel }),
+    plan.pushAfterMerge
+      ? t("summaryPushRemote", { remote: plan.pushRemote ?? "-" })
+      : t("summaryNoPush"),
   ];
   if (plan.jenkins) {
-    lines.push(`Jenkins: ${plan.jenkins.job}`);
+    lines.push(t("summaryJenkinsJob", { job: plan.jenkins.job }));
   } else {
-    lines.push("Jenkins: 未启用");
+    lines.push(t("summaryJenkinsDisabled"));
   }
   return lines;
 }
 
-export function getDefaultConfigTemplate(): MergeConfigFile {
-  return {
-    ui: {
-      refreshLabel: "⟳",
-      openConfigLabel: "打开配置文件",
-    },
-    profiles: [
-      {
-        id: "merge-main",
-        label: "合并到 main",
-        sourceBranch: "",
-        targetBranch: "main",
-        strategy: "default",
-        pushAfterMerge: true,
-        pushRemote: "origin",
-        jenkins: {
-          enabled: false,
-          url: "https://jenkins.example.com",
-          job: "folder/jobName",
-          token: "",
-          user: "",
-          apiToken: "",
-          crumb: true,
-          parameters: {
-            SOURCE_BRANCH: "${sourceBranch}",
-            TARGET_BRANCH: "${targetBranch}",
-            MERGE_COMMIT: "${mergeCommit}",
-          },
-        },
-      },
-      {
-        id: "merge-release",
-        label: "合并到 release",
-        sourceBranch: "",
-        targetBranch: "release",
-        strategy: "no-ff",
-        pushAfterMerge: true,
-        pushRemote: "origin",
-      },
-    ],
-  };
+export async function getDefaultConfigTemplate(
+  templatePath: string
+): Promise<string> {
+  const uri = vscode.Uri.file(templatePath);
+  const content = await vscode.workspace.fs.readFile(uri);
+  return Buffer.from(content).toString("utf8");
+}
+
+export async function getConfigPathInfo(cwd: string): Promise<{
+  path: string;
+  exists: boolean;
+  isLegacy: boolean;
+}> {
+  const jsoncPath = path.join(cwd, CONFIG_FILE_NAME);
+  if (await pathExists(jsoncPath)) {
+    return { path: jsoncPath, exists: true, isLegacy: false };
+  }
+  const legacyPath = path.join(cwd, LEGACY_CONFIG_FILE_NAME);
+  if (await pathExists(legacyPath)) {
+    return { path: legacyPath, exists: true, isLegacy: true };
+  }
+  return { path: jsoncPath, exists: false, isLegacy: false };
+}
+
+function stripJsonComments(input: string): string {
+  let output = "";
+  let inString = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    const next = input[i + 1];
+    if (inLineComment) {
+      if (char === "\n") {
+        inLineComment = false;
+        output += char;
+      }
+      continue;
+    }
+    if (inBlockComment) {
+      if (char === "*" && next === "/") {
+        inBlockComment = false;
+        i += 1;
+      }
+      continue;
+    }
+    if (inString) {
+      output += char;
+      if (char === '"' && !isEscaped(input, i)) {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      output += char;
+      continue;
+    }
+    if (char === "/" && next === "/") {
+      inLineComment = true;
+      i += 1;
+      continue;
+    }
+    if (char === "/" && next === "*") {
+      inBlockComment = true;
+      i += 1;
+      continue;
+    }
+    output += char;
+  }
+  return output;
+}
+
+function isEscaped(input: string, index: number): boolean {
+  let backslashes = 0;
+  for (let i = index - 1; i >= 0 && input[i] === "\\"; i -= 1) {
+    backslashes += 1;
+  }
+  return backslashes % 2 === 1;
 }

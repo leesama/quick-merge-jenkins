@@ -22,6 +22,7 @@ import {
   ResolvedMergePlan,
   JenkinsConfig,
 } from "./types";
+import { t } from "./i18n";
 
 export async function performMerge(
   cwd: string,
@@ -129,7 +130,7 @@ export async function loadMergePlan(
     listRemotes(cwd),
   ]);
   if (!currentBranch) {
-    throw new Error("无法获取当前分支。");
+    throw new Error(t("currentBranchMissing"));
   }
   const configFile = await readMergeConfig(cwd);
   const { profiles } = normalizeConfigFile(configFile);
@@ -144,14 +145,14 @@ export function resolveMergePlan(
 ): ResolvedMergePlan {
   const targetBranch = (config.targetBranch ?? "").trim();
   if (!targetBranch) {
-    throw new Error("配置缺少 targetBranch。");
+    throw new Error(t("missingTargetBranch"));
   }
   const sourceBranch = (config.sourceBranch ?? "").trim() || currentBranch;
   if (!sourceBranch) {
-    throw new Error("无法确定源分支。");
+    throw new Error(t("missingSourceBranch"));
   }
   if (sourceBranch === targetBranch) {
-    throw new Error("源分支和目标分支不能相同。");
+    throw new Error(t("sameSourceTarget"));
   }
 
   const strategyInfo = normalizeStrategy(config.strategy);
@@ -162,21 +163,21 @@ export function resolveMergePlan(
     const defaultRemote = getDefaultRemote(remotes);
     if (desiredRemote) {
       if (remotes.length > 0 && !remotes.includes(desiredRemote)) {
-        throw new Error(`远端 ${desiredRemote} 不存在。`);
+        throw new Error(t("remoteNotFound", { remote: desiredRemote }));
       }
       pushRemote = desiredRemote;
     } else {
       pushRemote = defaultRemote;
     }
     if (!pushRemote) {
-      throw new Error("未找到可用远端，无法推送。");
+      throw new Error(t("noRemote"));
     }
   }
 
   let jenkins: JenkinsConfig | undefined;
   if (config.jenkins && config.jenkins.enabled !== false) {
     if (!config.jenkins.url || !config.jenkins.job) {
-      throw new Error("Jenkins 配置缺少 url 或 job。");
+      throw new Error(t("jenkinsMissingConfig"));
     }
     jenkins = config.jenkins;
   }

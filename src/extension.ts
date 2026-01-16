@@ -1,14 +1,22 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
-import { CONFIG_FILE_NAME, DEFAULT_UI_LABELS } from "./constants";
-import { getDefaultConfigTemplate } from "./config";
+import {
+  getConfigPathInfo,
+  getDefaultConfigTemplate,
+  readMergeConfig,
+} from "./config";
 import { getConfigGroup, getConfigGroups } from "./config-groups";
-import { getCurrentBranch, runGit } from "./git";
+import { getCurrentBranch, listBranches, listRemoteBranches, runGit } from "./git";
+import { getDefaultUiLabels, getLocale, t } from "./i18n";
 import { loadMergePlan, performMerge } from "./merge";
 import { getWorkspaceRoot, resolveRepoRoot, resolveRepoRoots } from "./repo";
 import { state } from "./state";
+import { MergeConfigFile } from "./types";
 import { getErrorMessage } from "./utils";
 import { getWebviewHtml } from "./webview";
+import { translateToEnglish } from "./deepseek";
+
+const DEMAND_MESSAGE_STORAGE_KEY = "quick-merge.demandMessages";
 
 export function activate(context: vscode.ExtensionContext): void {
   const provider = new QuickMergeViewProvider(context);
@@ -61,6 +69,16 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
         await this.handleMerge(message);
         return;
       }
+      if (message?.type === "confirmMerge") {
+        await this.confirmMerge(message);
+        return;
+      }
+      if (message?.type === "commitDemand") {
+        const repoRoot =
+          typeof message?.repoRoot === "string" ? message.repoRoot : undefined;
+        await this.commitDemandCode(repoRoot);
+        return;
+      }
       if (message?.type === "checkoutOriginal") {
         await this.checkoutOriginal();
         return;
@@ -74,7 +92,15 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
         return;
       }
       if (message?.type === "openConfig") {
-        await this.openConfig();
+        const repoRoot =
+          typeof message?.repoRoot === "string" ? message.repoRoot : undefined;
+        await this.openConfig(repoRoot);
+        return;
+      }
+      if (message?.type === "createDemandBranch") {
+        const repoRoot =
+          typeof message?.repoRoot === "string" ? message.repoRoot : undefined;
+        await this.createDemandBranch(repoRoot);
         return;
       }
     });
@@ -93,17 +119,15 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
   async openConflictFiles(): Promise<void> {
     const cwd = state.lastWorkspaceRoot ?? (await resolveRepoRoot());
     if (!cwd) {
-      void vscode.window.showErrorMessage(
-        "未找到工作区，无法打开冲突文件列表。"
-      );
+      void vscode.window.showErrorMessage(t("openConflictWorkspaceMissing"));
       return;
     }
     if (state.lastConflictFiles.length === 0) {
-      void vscode.window.showInformationMessage("当前没有检测到冲突文件。");
+      void vscode.window.showInformationMessage(t("noConflictFiles"));
       return;
     }
     const pick = await vscode.window.showQuickPick(state.lastConflictFiles, {
-      placeHolder: "选择要打开的冲突文件",
+      placeHolder: t("pickConflictFile"),
     });
     if (!pick) {
       return;
@@ -115,17 +139,17 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
   async openMergeEditor(): Promise<void> {
     const cwd = state.lastWorkspaceRoot ?? (await resolveRepoRoot());
     if (!cwd) {
-      void vscode.window.showErrorMessage("未找到工作区，无法打开合并编辑器。");
+      void vscode.window.showErrorMessage(t("openMergeEditorWorkspaceMissing"));
       return;
     }
     if (state.lastConflictFiles.length === 0) {
-      void vscode.window.showInformationMessage("当前没有检测到冲突文件。");
+      void vscode.window.showInformationMessage(t("noConflictFiles"));
       return;
     }
     let target = state.lastConflictFiles[0];
     if (state.lastConflictFiles.length > 1) {
       const pick = await vscode.window.showQuickPick(state.lastConflictFiles, {
-        placeHolder: "选择要在合并编辑器中打开的文件",
+        placeHolder: t("pickMergeEditorFile"),
       });
       if (!pick) {
         return;
@@ -150,39 +174,56 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  async openConfig(): Promise<void> {
+  async openConfig(repoRoot?: string): Promise<void> {
     const workspaceRoot = getWorkspaceRoot();
     if (!workspaceRoot) {
-      void vscode.window.showErrorMessage("未找到工作区，无法打开配置文件。");
+      void vscode.window.showErrorMessage(t("openConfigWorkspaceMissing"));
       return;
     }
     const activeRepoRoot = await resolveRepoRoot();
     const repoRoots = await resolveRepoRoots(activeRepoRoot ?? workspaceRoot);
     if (repoRoots.length === 0) {
+      void vscode.window.showErrorMessage(t("noGitRepoCreateConfig"));
+      return;
+    }
+    const requestedRepoRoot =
+      repoRoot && repoRoots.includes(repoRoot) ? repoRoot : undefined;
+    if (repoRoot && !requestedRepoRoot) {
+      void vscode.window.showErrorMessage(t("repoNotFound"));
+      return;
+    }
+    const templatePath = path.join(
+      this.context.extensionPath,
+      "media",
+      getLocale() === "zh" ? "default-config.jsonc" : "default-config.en.jsonc"
+    );
+    let template: string;
+    try {
+      template = await getDefaultConfigTemplate(templatePath);
+    } catch (error) {
       void vscode.window.showErrorMessage(
-        "未找到 Git 仓库，无法创建配置文件。"
+        t("readTemplateFailed", { error: getErrorMessage(error) })
       );
       return;
     }
-    const template = getDefaultConfigTemplate();
-    const content = Buffer.from(JSON.stringify(template, null, 2));
+    const content = Buffer.from(template);
+    const targetRoots = requestedRepoRoot ? [requestedRepoRoot] : repoRoots;
     await Promise.all(
-      repoRoots.map(async (repoRoot) => {
-        const configUri = vscode.Uri.file(
-          path.join(repoRoot, CONFIG_FILE_NAME)
-        );
-        try {
-          await vscode.workspace.fs.stat(configUri);
-        } catch {
+      targetRoots.map(async (targetRoot) => {
+        const configInfo = await getConfigPathInfo(targetRoot);
+        const configUri = vscode.Uri.file(configInfo.path);
+        if (!configInfo.exists) {
           await vscode.workspace.fs.writeFile(configUri, content);
         }
       })
     );
-    const openRoot =
-      activeRepoRoot && repoRoots.includes(activeRepoRoot)
+    const openRoot = requestedRepoRoot
+      ? requestedRepoRoot
+      : activeRepoRoot && repoRoots.includes(activeRepoRoot)
         ? activeRepoRoot
         : repoRoots[0];
-    const openUri = vscode.Uri.file(path.join(openRoot, CONFIG_FILE_NAME));
+    const openConfigInfo = await getConfigPathInfo(openRoot);
+    const openUri = vscode.Uri.file(openConfigInfo.path);
     const doc = await vscode.workspace.openTextDocument(openUri);
     await vscode.window.showTextDocument(doc, { preview: false });
     await this.postState({ loadConfig: true });
@@ -190,7 +231,7 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
 
   private async checkoutOriginal(): Promise<void> {
     if (!state.lastFailureContext) {
-      void vscode.window.showInformationMessage("没有需要返回的原分支。");
+      void vscode.window.showInformationMessage(t("noOriginalBranch"));
       return;
     }
     try {
@@ -203,12 +244,12 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       await this.postState({ loadConfig: false });
       this.postMessage({
         type: "info",
-        message: "已返回原分支。",
+        message: t("checkoutOriginalSuccess"),
       });
     } catch (error) {
       this.postMessage({
         type: "error",
-        message: `返回原分支失败：${getErrorMessage(error)}`,
+        message: t("checkoutOriginalFailed", { error: getErrorMessage(error) }),
       });
     }
   }
@@ -220,7 +261,7 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
     if (!cwd) {
       this.postMessage({
         type: "error",
-        message: "未找到工作区，请先打开一个包含 Git 仓库的文件夹。",
+        message: t("workspaceMissingForMerge"),
       });
       return;
     }
@@ -228,7 +269,7 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
 
     this.postMessage({
       type: "mergeStarted",
-      message: "正在执行合并...",
+      message: t("mergeStarted"),
     });
 
     try {
@@ -251,13 +292,51 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
         type: "result",
         result,
       });
+      if (result.status === "success") {
+        const hasFailure =
+          result.checkoutBack === "failed" ||
+          result.pushStatus === "failed" ||
+          result.jenkinsStatus === "failed";
+        const message = hasFailure
+          ? t("mergeCompletedWithFailures", { target: result.targetBranch })
+          : t("mergeSuccess", { target: result.targetBranch });
+        if (hasFailure) {
+          void vscode.window.showWarningMessage(message);
+        } else {
+          void vscode.window.showInformationMessage(message);
+        }
+      } else {
+        void vscode.window.showErrorMessage(
+          t("mergeFailed", { error: result.errorMessage })
+        );
+      }
       await this.postState({ loadConfig: false });
     } catch (error) {
+      void vscode.window.showErrorMessage(
+        t("mergeFailed", { error: getErrorMessage(error) })
+      );
       this.postMessage({
         type: "error",
         message: getErrorMessage(error),
       });
     }
+  }
+
+  private async confirmMerge(message: any): Promise<void> {
+    const label =
+      typeof message?.label === "string" ? message.label.trim() : "";
+    const prompt = label
+      ? t("mergeConfirmWithLabel", { label })
+      : t("mergeConfirm");
+    const choice = await vscode.window.showInformationMessage(
+      prompt,
+      { modal: true },
+      t("confirm")
+    );
+    if (choice !== t("confirm")) {
+      return;
+    }
+    await this.handleMerge(message);
   }
 
   private async postState(options?: {
@@ -272,7 +351,7 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       state.lastConfigRootsKey = "";
       state.lastConfigGroups = [];
       state.lastConfigError = "";
-      state.lastUiLabels = DEFAULT_UI_LABELS;
+      state.lastUiLabels = getDefaultUiLabels();
       state.lastConfigLoaded = false;
       state.lastHasMissingConfig = false;
       this.postMessage({
@@ -280,8 +359,8 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
         currentBranch: "",
         configGroups: [],
         configSummary: [],
-        configError: "未找到工作区。",
-        uiLabels: DEFAULT_UI_LABELS,
+        configError: t("workspaceNotFound"),
+        uiLabels: getDefaultUiLabels(),
         configLoaded: false,
         hasMissingConfig: false,
       });
@@ -296,7 +375,7 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       state.lastConfigRootsKey = repoRootsKey;
       state.lastConfigGroups = [];
       state.lastConfigError = "";
-      state.lastUiLabels = DEFAULT_UI_LABELS;
+      state.lastUiLabels = getDefaultUiLabels();
       state.lastConfigLoaded = false;
       state.lastHasMissingConfig = false;
     }
@@ -357,6 +436,308 @@ class QuickMergeViewProvider implements vscode.WebviewViewProvider {
     void this.view?.webview.postMessage(message);
   }
 
+  private async createDemandBranch(repoRoot?: string): Promise<void> {
+    const notifyInfo = (message: string) => {
+      this.postMessage({ type: "info", message });
+      void vscode.window.showInformationMessage(message);
+    };
+    const notifyError = (message: string) => {
+      this.postMessage({ type: "error", message });
+      void vscode.window.showErrorMessage(message);
+    };
+    const workspaceRoot = getWorkspaceRoot();
+    if (!workspaceRoot) {
+      notifyError(t("workspaceOpenProject"));
+      return;
+    }
+    const activeRepoRoot = await resolveRepoRoot();
+    const repoRoots = await resolveRepoRoots(
+      activeRepoRoot ?? workspaceRoot
+    );
+    if (repoRoots.length === 0) {
+      notifyError(t("workspaceMissingForMerge"));
+      return;
+    }
+    const requestedRepoRoot =
+      repoRoot && repoRoots.includes(repoRoot) ? repoRoot : undefined;
+    if (repoRoot && !requestedRepoRoot) {
+      notifyError(t("repoNotFound"));
+      return;
+    }
+    const defaultRepoRoot =
+      activeRepoRoot && repoRoots.includes(activeRepoRoot)
+        ? activeRepoRoot
+        : repoRoots[0];
+    const cwd = requestedRepoRoot ?? defaultRepoRoot;
+    let configFile: MergeConfigFile | null = null;
+    try {
+      configFile = await readMergeConfig(cwd);
+    } catch {
+      configFile = null;
+    }
+    const settings = resolveDemandBranchSettings(configFile);
+    if (settings.prefixes.length === 0) {
+      notifyError(t("demandPrefixEmpty"));
+      return;
+    }
+    const typePick = await vscode.window.showQuickPick(
+      settings.prefixes.map((prefix) => ({
+        label: prefix,
+        description:
+          prefix === "feature"
+            ? t("demandTypeFeature")
+            : prefix === "fix"
+              ? t("demandTypeFix")
+              : "",
+        value: prefix,
+      })),
+      { placeHolder: t("demandTypePlaceholder") }
+    );
+    if (!typePick) {
+      return;
+    }
+    const input = await vscode.window.showInputBox({
+      prompt: t("demandDescPrompt"),
+      placeHolder: t("demandDescPlaceholder"),
+      validateInput: (value) =>
+        value.trim().length === 0 ? t("demandDescRequired") : undefined,
+    });
+    if (!input) {
+      return;
+    }
+    if (!settings.apiKey) {
+      notifyError(t("deepseekKeyMissing"));
+      return;
+    }
+    let baseBranch: string | null = null;
+    try {
+      baseBranch = await getLatestReleaseBranch(cwd, settings.releasePrefix);
+    } catch (error) {
+      notifyError(getErrorMessage(error));
+      return;
+    }
+    if (!baseBranch) {
+      let branches: string[];
+      try {
+        const [remoteBranches, localBranches] = await Promise.all([
+          listRemoteBranches(cwd).catch(() => []),
+          listBranches(cwd),
+        ]);
+        const merged = [...remoteBranches, ...localBranches];
+        const seen = new Set<string>();
+        branches = merged.filter((branch) => {
+          if (seen.has(branch)) {
+            return false;
+          }
+          seen.add(branch);
+          return true;
+        });
+      } catch (error) {
+        notifyError(getErrorMessage(error));
+        return;
+      }
+      if (branches.length === 0) {
+        notifyError(t("noBranchFound"));
+        return;
+      }
+      const pick = await vscode.window.showQuickPick(branches, {
+        placeHolder: t("pickBaseBranchPlaceholder", {
+          prefix: settings.releasePrefix,
+        }),
+      });
+      if (!pick) {
+        return;
+      }
+      baseBranch = pick;
+    }
+    const demandMessage = input.trim().replace(/\s+/g, " ");
+    let branchName = "";
+    this.postMessage({
+      type: "info",
+      message: t("generatingBranchName"),
+    });
+    let translated: string;
+    try {
+      translated = await translateToEnglish(input, settings);
+    } catch (error) {
+      notifyError(getErrorMessage(error));
+      return;
+    }
+    const slug = toBranchSlug(translated);
+    if (!slug) {
+      notifyError(t("translationEmpty"));
+      return;
+    }
+    const dateStamp = formatDateStamp(new Date());
+    branchName = `${typePick.value}_${slug}_${dateStamp}`;
+    const edited = await vscode.window.showInputBox({
+      prompt: t("branchNamePrompt"),
+      value: branchName,
+      placeHolder: t("branchNamePlaceholder"),
+      validateInput: (value) =>
+        value.trim().length === 0 ? t("branchNameRequired") : undefined,
+    });
+    if (!edited) {
+      return;
+    }
+    branchName = edited.trim();
+    const choice = await vscode.window.showInformationMessage(
+      t("branchConfirm", { branchName }),
+      { modal: true, detail: t("baseBranchDetail", { baseBranch }) },
+      t("confirm")
+    );
+    if (choice !== t("confirm")) {
+      return;
+    }
+    try {
+      const branches = await listBranches(cwd);
+      if (branches.includes(branchName)) {
+        notifyError(t("branchExists", { branchName }));
+        return;
+      }
+      await runGit(["checkout", "-b", branchName, baseBranch], cwd);
+      await this.saveDemandMessage(cwd, demandMessage);
+      await runGit(["commit", "--allow-empty", "-m", demandMessage], cwd);
+      notifyInfo(t("emptyCommitCreated", { message: demandMessage }));
+      notifyInfo(t("demandBranchCreated", { baseBranch, branchName }));
+    } catch (error) {
+      notifyError(getErrorMessage(error));
+    }
+  }
+
+  private async commitDemandCode(repoRoot?: string): Promise<void> {
+    const notifyInfo = (message: string) => {
+      this.postMessage({ type: "info", message });
+      void vscode.window.showInformationMessage(message);
+    };
+    const notifyError = (message: string) => {
+      this.postMessage({ type: "error", message });
+      void vscode.window.showErrorMessage(message);
+    };
+    const workspaceRoot = getWorkspaceRoot();
+    if (!workspaceRoot) {
+      notifyError(t("workspaceOpenProject"));
+      return;
+    }
+    const activeRepoRoot = await resolveRepoRoot();
+    const repoRoots = await resolveRepoRoots(
+      activeRepoRoot ?? workspaceRoot
+    );
+    if (repoRoots.length === 0) {
+      notifyError(t("workspaceMissingForMerge"));
+      return;
+    }
+    const requestedRepoRoot =
+      repoRoot && repoRoots.includes(repoRoot) ? repoRoot : undefined;
+    if (repoRoot && !requestedRepoRoot) {
+      notifyError(t("repoNotFound"));
+      return;
+    }
+    const defaultRepoRoot =
+      activeRepoRoot && repoRoots.includes(activeRepoRoot)
+        ? activeRepoRoot
+        : repoRoots[0];
+    const cwd = requestedRepoRoot ?? defaultRepoRoot;
+    const storedDemandMessage = this.getDemandMessage(cwd);
+    let lastCommitMessage = "";
+    try {
+      lastCommitMessage = await this.getLastCommitMessage(cwd);
+    } catch {
+      lastCommitMessage = "";
+    }
+    const baseMessage = lastCommitMessage || storedDemandMessage;
+    if (!baseMessage || baseMessage.trim().length === 0) {
+      notifyError(t("demandMessageMissing"));
+      return;
+    }
+    const defaultMessage = this.buildNextCommitMessage(baseMessage);
+    const inputMessage = await vscode.window.showInputBox({
+      prompt: t("commitMessagePrompt"),
+      value: defaultMessage,
+      placeHolder: t("commitMessagePlaceholder"),
+      validateInput: (value) =>
+        value.trim().length === 0 ? t("commitMessageRequired") : undefined,
+    });
+    if (!inputMessage) {
+      return;
+    }
+    const commitMessage = inputMessage.trim();
+    const choice = await vscode.window.showInformationMessage(
+      t("commitConfirm", { demandMessage: commitMessage }),
+      { modal: true },
+      t("confirm")
+    );
+    if (choice !== t("confirm")) {
+      return;
+    }
+    try {
+      await runGit(["add", "-A"], cwd);
+      const status = await runGit(["status", "--porcelain"], cwd);
+      if (!status.stdout.trim()) {
+        notifyInfo(t("commitNoChanges"));
+        return;
+      }
+      await runGit(["commit", "-m", commitMessage], cwd);
+      notifyInfo(t("commitSuccess", { message: commitMessage }));
+    } catch (error) {
+      notifyError(getErrorMessage(error));
+    }
+  }
+
+  private getDemandMessage(repoRoot: string): string {
+    const stored =
+      this.context.workspaceState.get<Record<string, string>>(
+        DEMAND_MESSAGE_STORAGE_KEY
+      ) ?? null;
+    if (stored && typeof stored === "object") {
+      state.lastDemandMessages = { ...stored };
+    }
+    return state.lastDemandMessages[repoRoot] ?? "";
+  }
+
+  private async saveDemandMessage(
+    repoRoot: string,
+    message: string
+  ): Promise<void> {
+    const trimmed = message.trim();
+    if (!trimmed) {
+      return;
+    }
+    const next = {
+      ...state.lastDemandMessages,
+      [repoRoot]: trimmed,
+    };
+    state.lastDemandMessages = next;
+    await this.context.workspaceState.update(
+      DEMAND_MESSAGE_STORAGE_KEY,
+      next
+    );
+  }
+
+  private async getLastCommitMessage(cwd: string): Promise<string> {
+    const result = await runGit(["log", "-1", "--pretty=%B"], cwd);
+    const lines = result.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    return lines[0] ?? "";
+  }
+
+  private buildNextCommitMessage(lastMessage: string): string {
+    const normalized = lastMessage.trim();
+    if (!normalized) {
+      return "";
+    }
+    const match = normalized.match(/^(.*?)(\d+)$/);
+    if (match) {
+      const base = match[1];
+      const number = Number(match[2]);
+      if (Number.isFinite(number)) {
+        return `${base}${number + 1}`;
+      }
+    }
+    return `${normalized}1`;
+  }
 }
 
 function setupDevAutoReload(context: vscode.ExtensionContext): void {
@@ -391,4 +772,128 @@ function setupDevAutoReload(context: vscode.ExtensionContext): void {
       }
     })
   );
+}
+
+function getDeepseekSettings(): {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+} {
+  const config = vscode.workspace.getConfiguration("quick-merge");
+  const apiKey = (config.get<string>("deepseekApiKey") ?? "").trim();
+  const baseUrl = (config.get<string>("deepseekBaseUrl") ?? "").trim();
+  const model =
+    (config.get<string>("deepseekModel") ?? "deepseek-chat").trim() ||
+    "deepseek-chat";
+  return { apiKey, baseUrl, model };
+}
+
+function resolveDemandBranchSettings(configFile: MergeConfigFile | null): {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  prefixes: string[];
+  releasePrefix: string;
+} {
+  const fallback = getDeepseekSettings();
+  const demandConfig = configFile?.demandBranch;
+  const apiKey = (demandConfig?.deepseekApiKey ?? fallback.apiKey).trim();
+  const baseUrl = (demandConfig?.deepseekBaseUrl ?? fallback.baseUrl).trim();
+  const model =
+    (demandConfig?.deepseekModel ?? fallback.model).trim() || "deepseek-chat";
+  const hasCustomPrefixes = Array.isArray(demandConfig?.prefixes);
+  const customPrefixes = normalizePrefixes(demandConfig?.prefixes ?? []);
+  const prefixes = hasCustomPrefixes
+    ? customPrefixes
+    : DEFAULT_DEMAND_PREFIXES;
+  const releasePrefix = normalizeReleasePrefix(demandConfig?.releasePrefix);
+  return { apiKey, baseUrl, model, prefixes, releasePrefix };
+}
+
+const DEFAULT_DEMAND_PREFIXES = ["feature", "fix"];
+const DEFAULT_RELEASE_PREFIX = "release";
+
+function normalizePrefixes(prefixes: unknown): string[] {
+  if (!Array.isArray(prefixes)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const prefix of prefixes) {
+    const normalized = toBranchSlug(String(prefix ?? ""));
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result;
+}
+
+function normalizeReleasePrefix(value?: string): string {
+  const normalized = toBranchSlug((value ?? "").trim());
+  return normalized || DEFAULT_RELEASE_PREFIX;
+}
+
+async function getLatestReleaseBranch(
+  cwd: string,
+  releasePrefix: string
+): Promise<string | null> {
+  const remoteBranches = await listRemoteBranches(cwd);
+  const latestRemote = findLatestReleaseBranch(remoteBranches, releasePrefix);
+  if (latestRemote) {
+    return latestRemote;
+  }
+  const localBranches = await listBranches(cwd);
+  return findLatestReleaseBranch(localBranches, releasePrefix);
+}
+
+function findLatestReleaseBranch(
+  branches: string[],
+  releasePrefix: string
+): string | null {
+  let latestBranch: string | null = null;
+  let latestDate = "";
+  for (const branch of branches) {
+    const date = extractReleaseDate(branch, releasePrefix);
+    if (!date) {
+      continue;
+    }
+    if (!latestDate || date > latestDate) {
+      latestDate = date;
+      latestBranch = branch;
+    }
+  }
+  return latestBranch;
+}
+
+function extractReleaseDate(
+  branch: string,
+  releasePrefix: string
+): string | null {
+  const prefix = `${releasePrefix}_`;
+  const name = branch.split("/").pop() || branch;
+  if (!name.startsWith(prefix)) {
+    return null;
+  }
+  const suffix = name.slice(prefix.length);
+  if (!/^\d{8}$/.test(suffix)) {
+    return null;
+  }
+  return suffix;
+}
+
+function formatDateStamp(date: Date): string {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getDate()}`.padStart(2, "0");
+  return `${year}${month}${day}`;
+}
+
+function toBranchSlug(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }

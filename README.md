@@ -1,6 +1,6 @@
 # Quick Merge Jenkins
 
-Config-driven VSCode merge helper. It reads `.quick-merge.json` from the project root, executes the merge flow via buttons, and can trigger Jenkins after a successful merge.
+Config-driven VSCode merge helper. It reads `.quick-merge.jsonc` from the project root, executes the merge flow via buttons, and can trigger Jenkins after a successful merge.
 
 [中文说明](README.zh-CN.md)
 
@@ -11,6 +11,7 @@ Config-driven VSCode merge helper. It reads `.quick-merge.json` from the project
 - Result details: merge summary (commit, changed files, duration), push + Jenkins status
 - Multiple profiles: define multiple merge buttons per project
 - Jenkins trigger: optional Jenkins build trigger (configured in file, not UI)
+- Demand branch creation: choose feature/fix + Chinese description, auto-translate and create a branch
 
 ## Usage
 
@@ -18,26 +19,42 @@ Config-driven VSCode merge helper. It reads `.quick-merge.json` from the project
 2. Click the refresh icon to load profiles; if no config exists, it will be created and opened
 3. Edit the config, then click the refresh icon again to reload
 4. Click a profile button to run the merge
+5. Click "Create Demand Branch", pick a type and input a Chinese description to create a branch
 
 > Note: The config is always read dynamically when executing a merge. Refresh is optional and only serves to visually update the button list in the sidebar—it does not affect actual config reading. For performance reasons, automatic file watching is not currently implemented.
 > You can also run `Quick Merge Jenkins: Open Config File` from the Command Palette.
 
 ## Config File
 
-Project root: `.quick-merge.json`
+Project root: `.quick-merge.jsonc` (comments supported, legacy `.quick-merge.json` also works)
 
 Example:
 
-```json
+```jsonc
 {
+  // UI labels
   "ui": {
     "refreshLabel": "⟳",
-    "openConfigLabel": "Open Config"
+    "openConfigLabel": {
+      "zh": "打开配置文件",
+      "en": "Open Config File"
+    }
+  },
+  // Demand branch settings (created from latest release_YYYYMMDD branch)
+  "demandBranch": {
+    "prefixes": ["feature", "fix"],
+    "releasePrefix": "release",
+    "deepseekApiKey": "",
+    "deepseekBaseUrl": "https://api.deepseek.com/v1",
+    "deepseekModel": "deepseek-chat"
   },
   "profiles": [
     {
       "id": "merge-main",
-      "label": "Merge to main",
+      "label": {
+        "zh": "合并到 main",
+        "en": "Merge to main"
+      },
       "sourceBranch": "",
       "targetBranch": "main",
       "strategy": "default",
@@ -59,7 +76,10 @@ Example:
     },
     {
       "id": "merge-release",
-      "label": "Merge to release",
+      "label": {
+        "zh": "合并到 release",
+        "en": "Merge to release"
+      },
       "sourceBranch": "",
       "targetBranch": "release",
       "strategy": "no-ff",
@@ -71,10 +91,17 @@ Example:
 
 ### Field Reference
 
-- `ui.refreshLabel` / `ui.openConfigLabel`: button labels (optional)
+- `ui.refreshLabel` / `ui.openConfigLabel`: button labels (optional, supports `{ "zh": "...", "en": "..." }`)
+- `demandBranch`: demand branch settings (optional)
+  - demand branches are created from the latest `releasePrefix_YYYYMMDD` branch (remote preferred); if none, pick a branch
+  - `prefixes`: branch prefixes (default `["feature", "fix"]`)
+  - `releasePrefix`: base branch prefix (default `release`)
+  - `deepseekApiKey`: DeepSeek API key (can be stored in config)
+  - `deepseekBaseUrl`: DeepSeek API base URL (default `https://api.deepseek.com/v1`)
+  - `deepseekModel`: DeepSeek model name (default `deepseek-chat`)
 - `profiles`: list of merge profiles (required)
   - `id`: profile key
-  - `label`: button label
+  - `label`: button label (supports `{ "zh": "...", "en": "..." }`)
   - `sourceBranch`: source branch, defaults to current branch when empty
   - `targetBranch`: target branch (required)
   - `strategy`: `default` / `no-ff` / `ff-only`
@@ -97,3 +124,11 @@ Example:
 
 - Jenkins Crumb 403: verify `user` + `apiToken`, or set `crumb` to `false`
 - Push failed: check `pushRemote` and repo permissions
+
+## Demand Branch Settings
+
+`demandBranch` in the config file takes precedence; you can also set fallback values in VS Code settings:
+
+- `quick-merge.deepseekApiKey`: DeepSeek API key
+- `quick-merge.deepseekBaseUrl`: API base URL (default `https://api.deepseek.com/v1`)
+- `quick-merge.deepseekModel`: model name (default `deepseek-chat`)

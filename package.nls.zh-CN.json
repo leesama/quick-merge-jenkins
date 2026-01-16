@@ -1,0 +1,14 @@
+{
+  "displayName": "Quick Merge Jenkins",
+  "description": "配置驱动的合并助手，支持触发 Jenkins",
+  "viewTitle": "Quick Merge Jenkins",
+  "viewName": "Quick Merge Jenkins",
+  "command.refresh": "Quick Merge Jenkins: 刷新配置",
+  "command.openConflictFiles": "Quick Merge Jenkins: 打开冲突文件",
+  "command.openMergeEditor": "Quick Merge Jenkins: 打开合并编辑器",
+  "command.openConfig": "Quick Merge Jenkins: 打开配置文件",
+  "configuration.title": "Quick Merge Jenkins",
+  "config.deepseekApiKey": "DeepSeek API Key，用于创建需求分支时翻译需求描述。",
+  "config.deepseekBaseUrl": "DeepSeek API 基地址，默认包含 /v1。",
+  "config.deepseekModel": "DeepSeek 模型名称。"
+}

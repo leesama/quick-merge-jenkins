@@ -1,17 +1,17 @@
-import * as path from "node:path";
-
-import { CONFIG_FILE_NAME, DEFAULT_UI_LABELS } from "./constants";
+import { CONFIG_FILE_NAME, LEGACY_CONFIG_FILE_NAME } from "./constants";
 import {
   buildConfigSummary,
   getProfileKey,
   getProfileLabel,
+  getConfigPathInfo,
   normalizeConfigFile,
   planLabel,
   readMergeConfig,
 } from "./config";
 import { getCurrentBranch, listRemotes } from "./git";
+import { getDefaultUiLabels, t } from "./i18n";
 import { resolveMergePlan } from "./merge";
-import { formatRepoLabel, pathExists } from "./repo";
+import { formatRepoLabel } from "./repo";
 import { getErrorMessage } from "./utils";
 import { ConfigGroup, UiLabels } from "./types";
 
@@ -21,15 +21,15 @@ export async function getConfigGroups(
   if (repoRoots.length === 0) {
     return {
       groups: [],
-      error: "未找到 Git 仓库。",
-      uiLabels: DEFAULT_UI_LABELS,
+      error: t("gitRepoNotFound"),
+      uiLabels: getDefaultUiLabels(),
     };
   }
   const results = await Promise.all(
     repoRoots.map((repoRoot) => getConfigGroup(repoRoot))
   );
   const groups = results.map((result) => result.group);
-  let uiLabels = DEFAULT_UI_LABELS;
+  let uiLabels = getDefaultUiLabels();
   if (repoRoots.length === 1) {
     for (const result of results) {
       if (!result.group.error) {
@@ -45,18 +45,20 @@ export async function getConfigGroup(
   repoRoot: string
 ): Promise<{ group: ConfigGroup; uiLabels: UiLabels }> {
   const repoLabel = formatRepoLabel(repoRoot);
-  const configPath = path.join(repoRoot, CONFIG_FILE_NAME);
-  const hasConfig = await pathExists(configPath);
-  if (!hasConfig) {
+  const configInfo = await getConfigPathInfo(repoRoot);
+  if (!configInfo.exists) {
     return {
       group: {
         repoRoot,
         repoLabel,
         items: [],
-        error: `未找到配置文件 ${CONFIG_FILE_NAME}。`,
+        error: t("configFileNotFound", {
+          configFile: CONFIG_FILE_NAME,
+          legacyFile: LEGACY_CONFIG_FILE_NAME,
+        }),
         missingConfig: true,
       },
-      uiLabels: DEFAULT_UI_LABELS,
+      uiLabels: getDefaultUiLabels(),
     };
   }
   try {
@@ -80,7 +82,7 @@ export async function getConfigGroup(
         return {
           key,
           label,
-          summary: [`配置错误: ${getErrorMessage(error)}`],
+          summary: [t("configErrorMessage", { error: getErrorMessage(error) })],
         };
       }
     });
@@ -102,7 +104,7 @@ export async function getConfigGroup(
         error: getErrorMessage(error),
         missingConfig: false,
       },
-      uiLabels: DEFAULT_UI_LABELS,
+      uiLabels: getDefaultUiLabels(),
     };
   }
 }

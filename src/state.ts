@@ -1,4 +1,4 @@
-import { DEFAULT_UI_LABELS } from "./constants";
+import { getDefaultUiLabels } from "./i18n";
 import { ConfigGroup, UiLabels } from "./types";
 
 export interface FailureContext {
@@ -17,6 +17,7 @@ export interface ExtensionState {
   lastUiLabels: UiLabels;
   lastConfigLoaded: boolean;
   lastHasMissingConfig: boolean;
+  lastDemandMessages: Record<string, string>;
 }
 
 export const state: ExtensionState = {
@@ -26,7 +27,8 @@ export const state: ExtensionState = {
   lastConfigRootsKey: "",
   lastConfigGroups: [],
   lastConfigError: "",
-  lastUiLabels: DEFAULT_UI_LABELS,
+  lastUiLabels: getDefaultUiLabels(),
   lastConfigLoaded: false,
   lastHasMissingConfig: false,
+  lastDemandMessages: {},
 };

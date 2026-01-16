@@ -1,6 +1,8 @@
+import { t } from "./i18n";
+
 export function getErrorMessage(error: unknown): string {
   if (!error) {
-    return "未知错误。";
+    return t("unknownError");
   }
   if (error instanceof Error) {
     return error.message;

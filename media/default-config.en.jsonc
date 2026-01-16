@@ -1,0 +1,58 @@
+{
+  // UI labels
+  "ui": {
+    "refreshLabel": "⟳",
+    "openConfigLabel": {
+      "zh": "打开配置文件",
+      "en": "Open Config File"
+    }
+  },
+  // Demand branch settings (created from latest release_YYYYMMDD branch)
+  "demandBranch": {
+    "prefixes": ["feature", "fix"],
+    "releasePrefix": "release",
+    "deepseekApiKey": "",
+    "deepseekBaseUrl": "https://api.deepseek.com/v1",
+    "deepseekModel": "deepseek-chat"
+  },
+  "profiles": [
+    {
+      "id": "merge-main",
+      "label": {
+        "zh": "合并到 main",
+        "en": "Merge to main"
+      },
+      "sourceBranch": "",
+      "targetBranch": "main",
+      "strategy": "default",
+      "pushAfterMerge": true,
+      "pushRemote": "origin",
+      "jenkins": {
+        "enabled": false,
+        "url": "https://jenkins.example.com",
+        "job": "folder/jobName",
+        "token": "",
+        "user": "",
+        "apiToken": "",
+        "crumb": true,
+        "parameters": {
+          "SOURCE_BRANCH": "${sourceBranch}",
+          "TARGET_BRANCH": "${targetBranch}",
+          "MERGE_COMMIT": "${mergeCommit}"
+        }
+      }
+    },
+    {
+      "id": "merge-release",
+      "label": {
+        "zh": "合并到 release",
+        "en": "Merge to release"
+      },
+      "sourceBranch": "",
+      "targetBranch": "release",
+      "strategy": "no-ff",
+      "pushAfterMerge": true,
+      "pushRemote": "origin"
+    }
+  ]
+}

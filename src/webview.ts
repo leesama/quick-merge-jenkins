@@ -1,11 +1,15 @@
 import * as vscode from "vscode";
 
+import { getLocale, getWebviewStrings } from "./i18n";
 import { getNonce } from "./utils";
 
 export function getWebviewHtml(webview: vscode.Webview): string {
   const nonce = getNonce();
+  const strings = getWebviewStrings();
+  const i18nJson = JSON.stringify(strings);
+  const lang = getLocale() === "zh" ? "zh-CN" : "en";
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
@@ -148,6 +152,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
     .config-group-title {
       font-weight: 600;
       color: var(--vscode-foreground);
+      cursor: pointer;
     }
 
     .config-group-header .config-group-title {
@@ -158,6 +163,19 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       width: auto;
       padding: 4px 8px;
       font-size: 0.85em;
+    }
+
+    .config-group-demand {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .config-group-demand button {
+      width: 100%;
+      padding: 6px 10px;
+      font-size: 0.9em;
     }
 
     .footer-actions button.icon-button,
@@ -255,7 +273,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
 <body>
   <div class="footer-actions">
     <div class="row" id="refreshRow">
-      <button id="refreshBtn" class="secondary" title="刷新配置" aria-label="刷新配置">⟳</button>
+      <button id="refreshBtn" class="secondary" title="${strings.refreshTitle}" aria-label="${strings.refreshTitle}">⟳</button>
     </div>
   </div>
 
@@ -266,26 +284,27 @@ export function getWebviewHtml(webview: vscode.Webview): string {
   <div class="status" id="status"></div>
 
   <div class="section" id="resultSection" hidden>
-    <span class="section-title">合并结果</span>
+    <span class="section-title">${strings.mergeResultTitle}</span>
     <div class="result-content" id="resultContent"></div>
   </div>
 
   <div class="section" id="conflictSection" hidden>
-    <span class="section-title">⚠️ 发现冲突</span>
+    <span class="section-title">${strings.conflictTitle}</span>
     <div class="conflict-content" id="conflictContent"></div>
     <div class="row">
-      <button id="openConflictFiles" class="secondary">查看冲突文件</button>
-      <button id="openMergeEditor" class="secondary">打开合并编辑器</button>
+      <button id="openConflictFiles" class="secondary">${strings.openConflictFiles}</button>
+      <button id="openMergeEditor" class="secondary">${strings.openMergeEditor}</button>
     </div>
     <div class="row">
-      <button id="checkoutOriginal" class="secondary">放弃合并 (回到原分支)</button>
-      <button id="stayOnTarget">保留当前状态 (解决冲突)</button>
+      <button id="checkoutOriginal" class="secondary">${strings.checkoutOriginal}</button>
+      <button id="stayOnTarget">${strings.stayOnTarget}</button>
     </div>
   </div>
 
 
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
+    const i18n = ${i18nJson};
     const configListEl = document.getElementById('configList');
     const statusEl = document.getElementById('status');
     const resultSection = document.getElementById('resultSection');
@@ -295,6 +314,18 @@ export function getWebviewHtml(webview: vscode.Webview): string {
     const refreshBtn = document.getElementById('refreshBtn');
     let lastHasMissingConfig = false;
     let pendingCreateOnLoad = false;
+
+    function format(template, params) {
+      if (!params) {
+        return template;
+      }
+      return template.replace(/\\{(\\w+)\\}/g, (match, key) => {
+        if (Object.prototype.hasOwnProperty.call(params, key)) {
+          return params[key];
+        }
+        return match;
+      });
+    }
 
     function setStatus(text, type = 'info') {
       statusEl.textContent = text || '';
@@ -331,11 +362,13 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         const itemEl = document.createElement('div');
         itemEl.className = 'config-item';
         const btn = document.createElement('button');
-        btn.textContent = item.label || '执行合并';
+        btn.textContent = item.label || i18n.mergeDefaultLabel;
         btn.addEventListener('click', () => {
-          setBusy(true);
-          setStatus('正在执行合并...', 'info');
-          const payload = { type: 'merge', profileKey: item.key };
+          const payload = {
+            type: 'confirmMerge',
+            profileKey: item.key,
+            label: btn.textContent || i18n.mergeDefaultLabel,
+          };
           if (repoRoot) {
             payload.repoRoot = repoRoot;
           }
@@ -350,6 +383,29 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         }
         container.appendChild(itemEl);
       }
+    }
+
+    function appendDemandButton(container, repoRoot) {
+      if (!repoRoot) {
+        return;
+      }
+      const actionsEl = document.createElement('div');
+      actionsEl.className = 'config-group-demand';
+      const demandBtn = document.createElement('button');
+      demandBtn.className = 'secondary';
+      demandBtn.textContent = i18n.demandCreate;
+      demandBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'createDemandBranch', repoRoot });
+      });
+      actionsEl.appendChild(demandBtn);
+      const commitBtn = document.createElement('button');
+      commitBtn.className = 'secondary';
+      commitBtn.textContent = i18n.demandCommit;
+      commitBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'commitDemand', repoRoot });
+      });
+      actionsEl.appendChild(commitBtn);
+      container.appendChild(actionsEl);
     }
 
     function renderState(data) {
@@ -370,19 +426,19 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       const refreshLabel = uiLabels.refreshLabel || '⟳';
       const isIconLabel = refreshLabel === '⟳';
       refreshBtn.textContent = refreshLabel;
-      refreshBtn.title = isIconLabel ? '刷新配置' : refreshLabel;
-      refreshBtn.setAttribute('aria-label', isIconLabel ? '刷新配置' : refreshLabel);
+      refreshBtn.title = isIconLabel ? i18n.refreshTitle : refreshLabel;
+      refreshBtn.setAttribute('aria-label', isIconLabel ? i18n.refreshTitle : refreshLabel);
       refreshBtn.classList.toggle('icon-button', isIconLabel);
       configListEl.innerHTML = '';
       if (error) {
         const errorEl = document.createElement('div');
-        errorEl.textContent = '配置错误: ' + error;
+        errorEl.textContent = format(i18n.configErrorMessage, { error });
         configListEl.appendChild(errorEl);
         return;
       }
       if (!configLoaded) {
         const hintEl = document.createElement('div');
-        hintEl.textContent = '请点击刷新图标读取配置，若无配置会自动创建。';
+        hintEl.textContent = i18n.refreshHint;
         configListEl.appendChild(hintEl);
         return;
       }
@@ -390,40 +446,97 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         const missingEl = document.createElement('div');
         missingEl.className = 'config-missing-hint';
         const labels = missingGroups.map(
-          (group) => group.repoLabel || group.repoRoot || 'Git 项目'
+          (group) => group.repoLabel || group.repoRoot || i18n.gitProjectLabel
         );
-        missingEl.textContent =
-          '缺少配置文件的仓库: ' + labels.join('、') + '（点击刷新图标创建）';
+        missingEl.textContent = format(i18n.missingConfigHint, {
+          labels: labels.join(i18n.listSeparator),
+        });
         configListEl.appendChild(missingEl);
       }
       if (groups.length === 1) {
         const group = groups[0] || {};
+        const groupEl = document.createElement('div');
+        groupEl.className = 'config-group';
+        const label = group.repoLabel || group.repoRoot || i18n.gitProjectLabel;
+        const headerEl = document.createElement('div');
+        headerEl.className = 'config-group-header';
+        const titleEl = document.createElement('div');
+        titleEl.className = 'config-group-title';
+        titleEl.textContent = label;
+        if (group.repoRoot) {
+          titleEl.title = i18n.openConfigHint;
+          titleEl.addEventListener('dblclick', () => {
+            vscode.postMessage({
+              type: 'openConfig',
+              repoRoot: group.repoRoot,
+            });
+          });
+        }
+        headerEl.appendChild(titleEl);
+        if (group.repoRoot) {
+          const actionsEl = document.createElement('div');
+          actionsEl.className = 'config-group-actions';
+          const refreshGroupBtn = document.createElement('button');
+          refreshGroupBtn.className = 'secondary';
+          refreshGroupBtn.textContent = refreshLabel;
+          refreshGroupBtn.title = isIconLabel ? i18n.refreshTitle : refreshLabel;
+          refreshGroupBtn.setAttribute(
+            'aria-label',
+            isIconLabel ? i18n.refreshTitle : refreshLabel
+          );
+          refreshGroupBtn.classList.toggle('icon-button', isIconLabel);
+          refreshGroupBtn.addEventListener('click', () => {
+            vscode.postMessage({
+              type: 'refreshRepo',
+              repoRoot: group.repoRoot,
+            });
+          });
+          actionsEl.appendChild(refreshGroupBtn);
+          headerEl.appendChild(actionsEl);
+        }
+        groupEl.appendChild(headerEl);
+        appendDemandButton(groupEl, group.repoRoot);
         if (group.error) {
           const groupError = document.createElement('div');
-          groupError.textContent = '配置错误: ' + group.error;
-          configListEl.appendChild(groupError);
+          groupError.className = 'config-group-error';
+          groupError.textContent = format(i18n.configErrorMessage, {
+            error: group.error,
+          });
+          groupEl.appendChild(groupError);
+          configListEl.appendChild(groupEl);
           return;
         }
         const groupItems = Array.isArray(group.items) ? group.items : [];
         if (groupItems.length === 0) {
           const emptyEl = document.createElement('div');
-          emptyEl.textContent = '未找到可用的合并配置。';
-          configListEl.appendChild(emptyEl);
+          emptyEl.textContent = i18n.noProfilesFound;
+          groupEl.appendChild(emptyEl);
+          configListEl.appendChild(groupEl);
           return;
         }
-        appendConfigItems(configListEl, groupItems, group.repoRoot);
+        appendConfigItems(groupEl, groupItems, group.repoRoot);
+        configListEl.appendChild(groupEl);
         return;
       }
       if (groups.length > 1) {
         for (const group of groups) {
           const groupEl = document.createElement('div');
           groupEl.className = 'config-group';
-          const label = group.repoLabel || group.repoRoot || 'Git 项目';
+          const label = group.repoLabel || group.repoRoot || i18n.gitProjectLabel;
           const headerEl = document.createElement('div');
           headerEl.className = 'config-group-header';
           const titleEl = document.createElement('div');
           titleEl.className = 'config-group-title';
           titleEl.textContent = label;
+          if (group.repoRoot) {
+            titleEl.title = i18n.openConfigHint;
+            titleEl.addEventListener('dblclick', () => {
+              vscode.postMessage({
+                type: 'openConfig',
+                repoRoot: group.repoRoot,
+              });
+            });
+          }
           headerEl.appendChild(titleEl);
           if (group.repoRoot) {
             const actionsEl = document.createElement('div');
@@ -431,10 +544,10 @@ export function getWebviewHtml(webview: vscode.Webview): string {
             const refreshGroupBtn = document.createElement('button');
             refreshGroupBtn.className = 'secondary';
             refreshGroupBtn.textContent = refreshLabel;
-            refreshGroupBtn.title = isIconLabel ? '刷新配置' : refreshLabel;
+            refreshGroupBtn.title = isIconLabel ? i18n.refreshTitle : refreshLabel;
             refreshGroupBtn.setAttribute(
               'aria-label',
-              isIconLabel ? '刷新配置' : refreshLabel
+              isIconLabel ? i18n.refreshTitle : refreshLabel
             );
             refreshGroupBtn.classList.toggle('icon-button', isIconLabel);
             refreshGroupBtn.addEventListener('click', () => {
@@ -447,16 +560,19 @@ export function getWebviewHtml(webview: vscode.Webview): string {
             headerEl.appendChild(actionsEl);
           }
           groupEl.appendChild(headerEl);
+          appendDemandButton(groupEl, group.repoRoot);
           if (group.error) {
             const groupError = document.createElement('div');
             groupError.className = 'config-group-error';
-            groupError.textContent = '配置错误: ' + group.error;
+            groupError.textContent = format(i18n.configErrorMessage, {
+              error: group.error,
+            });
             groupEl.appendChild(groupError);
           }
           const groupItems = Array.isArray(group.items) ? group.items : [];
           if (groupItems.length === 0 && !group.error) {
             const emptyEl = document.createElement('div');
-            emptyEl.textContent = '未找到可用的合并配置。';
+            emptyEl.textContent = i18n.noProfilesFound;
             groupEl.appendChild(emptyEl);
           } else {
             appendConfigItems(groupEl, groupItems, group.repoRoot);
@@ -467,7 +583,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       }
       if (items.length === 0) {
         const emptyEl = document.createElement('div');
-        emptyEl.textContent = '未找到可用的合并配置。';
+        emptyEl.textContent = i18n.noProfilesFound;
         configListEl.appendChild(emptyEl);
         return;
       }
@@ -480,31 +596,32 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         conflictSection.hidden = true;
 
         let html = '';
-        html += '<p><strong>✅ 合并成功</strong></p>';
-        html += '<p>目标分支: ' + result.targetBranch + '</p>';
-        html += '<p>Head Commit: ' + result.headCommit + (result.isMergeCommit ? ' (Merge Commit)' : '') + '</p>';
-        html += '<p>耗时: ' + Math.round(result.durationMs) + ' ms</p>';
+        const mergeCommitSuffix = result.isMergeCommit ? i18n.mergeCommitSuffix : '';
+        html += '<p><strong>' + i18n.mergeSuccessTitle + '</strong></p>';
+        html += '<p>' + format(i18n.targetBranchLabel, { branch: result.targetBranch }) + '</p>';
+        html += '<p>' + format(i18n.headCommitLabel, { commit: result.headCommit + mergeCommitSuffix }) + '</p>';
+        html += '<p>' + format(i18n.durationLabel, { duration: String(Math.round(result.durationMs)) }) + '</p>';
 
         if (result.checkoutBack === 'failed') {
-          html += '<p style=\"color: var(--vscode-errorForeground)\">⚠️ 回到原分支失败: ' + (result.checkoutError || '') + '</p>';
+          html += '<p style=\"color: var(--vscode-errorForeground)\">' + format(i18n.checkoutBackFailed, { error: result.checkoutError || '' }) + '</p>';
         } else {
-           html += '<p>↩️ 已切回原分支: ' + result.currentBranch + '</p>';
+           html += '<p>' + format(i18n.checkoutBackOk, { branch: result.currentBranch }) + '</p>';
         }
 
         if (result.pushStatus === 'ok') {
-          html += '<p>🚀 已推送到远端: ' + result.pushRemote + '</p>';
+          html += '<p>' + format(i18n.pushOk, { remote: result.pushRemote || '' }) + '</p>';
         } else if (result.pushStatus === 'failed') {
-          html += '<p style=\"color: var(--vscode-errorForeground)\">推送失败: ' + (result.pushError || '') + '</p>';
+          html += '<p style=\"color: var(--vscode-errorForeground)\">' + format(i18n.pushFailed, { error: result.pushError || '' }) + '</p>';
         }
 
         if (result.jenkinsStatus === 'ok') {
-          html += '<p>🔔 Jenkins 已触发: ' + (result.jenkinsJob || '') + '</p>';
+          html += '<p>' + format(i18n.jenkinsOk, { job: result.jenkinsJob || '' }) + '</p>';
         } else if (result.jenkinsStatus === 'failed') {
-          html += '<p style=\"color: var(--vscode-errorForeground)\">Jenkins 触发失败: ' + (result.jenkinsError || '') + '</p>';
+          html += '<p style=\"color: var(--vscode-errorForeground)\">' + format(i18n.jenkinsFailed, { error: result.jenkinsError || '' }) + '</p>';
         }
 
         if (Array.isArray(result.files) && result.files.length > 0) {
-          html += '<div style=\"margin-top:8px;\"><strong>变更文件:</strong></div><ul>';
+          html += '<div style=\"margin-top:8px;\"><strong>' + i18n.changedFilesLabel + '</strong></div><ul>';
           for (const file of result.files) {
             html += '<li>' + file + '</li>';
           }
@@ -513,27 +630,26 @@ export function getWebviewHtml(webview: vscode.Webview): string {
 
         resultContent.innerHTML = html;
         const pushState = result.pushStatus === 'ok'
-          ? '成功'
+          ? i18n.statusSuccess
           : result.pushStatus === 'failed'
-            ? '失败'
-            : '跳过';
+            ? i18n.statusFailed
+            : i18n.statusSkipped;
         const jenkinsState = result.jenkinsStatus === 'ok'
-          ? '成功'
+          ? i18n.statusSuccess
           : result.jenkinsStatus === 'failed'
-            ? '失败'
-            : '跳过';
-        const checkoutState = result.checkoutBack === 'ok' ? '成功' : '失败';
+            ? i18n.statusFailed
+            : i18n.statusSkipped;
+        const checkoutState = result.checkoutBack === 'ok' ? i18n.statusSuccess : i18n.statusFailed;
         const hasFailure =
           result.checkoutBack === 'failed' ||
           result.pushStatus === 'failed' ||
           result.jenkinsStatus === 'failed';
-        const statusText =
-          '合并: 成功 | 推送: ' +
-          pushState +
-          ' | Jenkins: ' +
-          jenkinsState +
-          ' | 切回: ' +
-          checkoutState;
+        const statusText = format(i18n.statusSummary, {
+          merge: i18n.statusSuccess,
+          push: pushState,
+          jenkins: jenkinsState,
+          checkout: checkoutState,
+        });
         const statusType = hasFailure ? 'error' : 'success';
         setStatus(statusText, statusType);
       }
@@ -542,13 +658,13 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         conflictSection.hidden = false;
 
         let html = '';
-        html += '<p>目标分支: ' + result.targetBranch + '</p>';
-        html += '<p style=\"color: var(--vscode-errorForeground)\">错误: ' + result.errorMessage + '</p>';
+        html += '<p>' + format(i18n.targetBranchLabel, { branch: result.targetBranch }) + '</p>';
+        html += '<p style=\"color: var(--vscode-errorForeground)\">' + format(i18n.mergeErrorLabel, { error: result.errorMessage }) + '</p>';
 
         conflictContent.innerHTML = html;
 
         if (Array.isArray(result.conflicts) && result.conflicts.length > 0) {
-            let conflictHtml = '<div style=\"margin-top:8px;\"><strong>冲突文件:</strong></div><ul>';
+            let conflictHtml = '<div style=\"margin-top:8px;\"><strong>' + i18n.conflictFilesLabel + '</strong></div><ul>';
             for (const file of result.conflicts) {
                 conflictHtml += '<li>' + file + '</li>';
             }
@@ -556,7 +672,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
             conflictContent.innerHTML += conflictHtml;
         }
 
-        setStatus('合并: 失败 | 推送: 未执行 | Jenkins: 未执行 | 切回: 未执行', 'error');
+        setStatus(i18n.mergeFailedSummary, 'error');
       }
     }
 
@@ -582,7 +698,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
     });
 
     document.getElementById('stayOnTarget').addEventListener('click', () => {
-      setStatus('已留在目标分支处理冲突。', 'info');
+      setStatus(i18n.stayOnTargetStatus, 'info');
       conflictSection.hidden = true; // Optionally hide conflict buttons if they decide to stay
     });
 
@@ -594,7 +710,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         return;
       }
       if (message.type === 'mergeStarted') {
-        setStatus(message.message || '正在执行合并...', 'info');
+        setStatus(message.message || i18n.mergeInProgress, 'info');
         setBusy(true);
         return;
       }
@@ -604,7 +720,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         return;
       }
       if (message.type === 'error') {
-        setStatus(message.message || '发生错误。', 'error');
+        setStatus(message.message || i18n.genericError, 'error');
         setBusy(false);
         return;
       }

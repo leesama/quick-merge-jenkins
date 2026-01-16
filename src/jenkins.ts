@@ -1,6 +1,7 @@
 import * as http from "node:http";
 import * as https from "node:https";
 
+import { t } from "./i18n";
 import { JenkinsConfig } from "./types";
 
 export async function triggerJenkinsBuild(
@@ -38,7 +39,10 @@ export async function triggerJenkinsBuild(
   });
   if (response.statusCode < 200 || response.statusCode >= 300) {
     throw new Error(
-      `Jenkins 触发失败 (${response.statusCode}) ${response.body}`.trim()
+      t("jenkinsTriggerFailed", {
+        statusCode: String(response.statusCode),
+        body: response.body,
+      }).trim()
     );
   }
 }
@@ -53,14 +57,16 @@ async function getJenkinsCrumb(
     headers,
   });
   if (response.statusCode < 200 || response.statusCode >= 300) {
-    throw new Error(`获取 Jenkins Crumb 失败 (${response.statusCode})`);
+    throw new Error(
+      t("jenkinsCrumbFailed", { statusCode: String(response.statusCode) })
+    );
   }
   const data = JSON.parse(response.body || "{}") as {
     crumbRequestField?: string;
     crumb?: string;
   };
   if (!data.crumbRequestField || !data.crumb) {
-    throw new Error("Jenkins Crumb 返回数据无效。");
+    throw new Error(t("jenkinsCrumbInvalid"));
   }
   return { field: data.crumbRequestField, value: data.crumb };
 }
@@ -68,7 +74,7 @@ async function getJenkinsCrumb(
 function getJenkinsJobPath(job: string): string {
   const segments = job.split("/").map((part) => part.trim()).filter(Boolean);
   if (segments.length === 0) {
-    throw new Error("Jenkins job 不能为空。");
+    throw new Error(t("jenkinsJobEmpty"));
   }
   return `/job/${segments.map(encodeURIComponent).join("/job/")}`;
 }

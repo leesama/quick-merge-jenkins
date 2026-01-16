@@ -2,7 +2,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-import { CONFIG_FILE_NAME, SCAN_SKIP_DIRS } from "./constants";
+import {
+  CONFIG_FILE_NAME,
+  LEGACY_CONFIG_FILE_NAME,
+  SCAN_SKIP_DIRS,
+} from "./constants";
 import { state } from "./state";
 
 export function getWorkspaceRoot(): string | null {
@@ -129,7 +133,8 @@ async function scanRepoRootsByDepth(
         continue;
       }
       if (
-        entry.name === CONFIG_FILE_NAME &&
+        (entry.name === CONFIG_FILE_NAME ||
+          entry.name === LEGACY_CONFIG_FILE_NAME) &&
         (entry.isFile() || entry.isSymbolicLink())
       ) {
         roots.add(dir);
