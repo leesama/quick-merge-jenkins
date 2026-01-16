@@ -2,6 +2,8 @@
 
 一个"配置驱动"的 VSCode 小工具：用于测试环境发布与需求分支相关流程，可选读取项目根目录的 `.quick-merge.jsonc` 作为配置来源。
 
+[![GitHub](https://img.shields.io/badge/GitHub-leesama%2Fquick--merge--jenkins-blue?logo=github)](https://github.com/leesama/quick-merge-jenkins)
+
 ## 推荐使用流程
 
 整个工具围绕日常开发流程设计，下面按典型工作流程介绍各按钮功能：

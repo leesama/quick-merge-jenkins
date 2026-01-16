@@ -2,6 +2,8 @@
 
 A config-driven VSCode helper for test deployments and demand branch workflows. Reads `.quick-merge.jsonc` from the project root for optional settings.
 
+[![GitHub](https://img.shields.io/badge/GitHub-leesama%2Fquick--merge--jenkins-blue?logo=github)](https://github.com/leesama/quick-merge-jenkins)
+
 [中文说明](README.zh-CN.md)
 
 ## Recommended Workflow
