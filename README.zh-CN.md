@@ -1,56 +1,113 @@
 # Quick Merge Jenkins
 
-一个“配置驱动”的 VSCode 小工具：用于测试环境发布与需求分支相关流程，可选读取项目根目录的 `.quick-merge.jsonc` 作为配置来源。
+一个"配置驱动"的 VSCode 小工具：用于测试环境发布与需求分支相关流程，可选读取项目根目录的 `.quick-merge.jsonc` 作为配置来源。
 
-## 功能
+## 推荐使用流程
 
-- 发布到测试环境：合并当前分支到目标分支，并触发 Jenkins
-- 发布到生产环境：基于最新 `releasePrefix_YYYYMMDD` 分支创建当天分支，并合并当前分支
-- 冲突处理：列出冲突文件、打开合并编辑器、回到原分支
-- 结果展示：合并摘要（commit、变更文件、耗时）、推送与 Jenkins 触发结果
-- 需求分支创建：选择 feature/fix + 中文描述，自动翻译成英文并创建分支
-- 提交代码：复用需求描述作为提交信息
-- 合并提交：将最近一组相同前缀的提交合并为一条
-- 合并提交并发布到生产环境：合并提交后创建当天 release 分支并合并当前分支
+整个工具围绕日常开发流程设计，下面按典型工作流程介绍各按钮功能：
 
-## 使用方式
+### Step 1: 初始化配置
 
-1. 打开项目文件夹，侧边栏点击 **Quick Merge Jenkins** 图标
-2. 如需生成配置，点击“创建基础配置”
-3. 点击“发布到测试环境”或“创建需求分支”（以及其他按钮）
-4. 如需调整设置，可打开配置文件并更新
+首次使用时，点击侧边栏 **Quick Merge Jenkins** 图标，如果项目未配置过：
 
-> 注意：配置会在执行发布/需求相关动作时动态读取，暂不支持自动监听配置文件变化。
-> 也可在命令面板执行 `Quick Merge Jenkins: Open Config File`。
+- **创建基础配置**：在项目根目录生成 `.quick-merge.jsonc` 配置文件模板，可根据实际需求修改 Jenkins 地址、分支配置等
+
+### Step 2: 开始新需求
+
+拿到新需求后，使用以下按钮创建需求分支：
+
+- **创建需求分支**：选择类型（feature/fix），输入中文需求描述，自动翻译成英文并基于最新 release 分支创建新分支
+  - 自动翻译基于 DeepSeek API，需在配置中填入 `deepseekApiKey`
+  - 例：输入 "用户登录优化" → 创建分支 `feature_user_login_optimization_20260116`
+
+### Step 3: 开发与提交
+
+在开发过程中，使用以下按钮进行代码提交：
+
+- **提交代码**：复用创建分支时的需求描述作为提交信息，快速完成规范的 commit
+
+### Step 4: 部署测试
+
+开发完成后，将代码部署到测试环境：
+
+- **发布到测试环境**：自动合并当前分支到目标测试分支（可配置，默认 `pre-test`），并触发 Jenkins 构建
+  - 展示合并结果（commit、变更文件、耗时）
+  - 展示 Jenkins 触发结果
+
+#### 冲突处理
+
+如合并时遇到冲突：
+
+- 工具会列出所有冲突文件
+- 点击冲突文件可打开 VS Code 内置合并编辑器
+- 解决完成后继续推送，或点击返回原分支
+
+### Step 5: 整理提交记录
+
+测试通过后，发布前可选择整理 commit 记录：
+
+- **合并提交**：默认选中当前分支上最近一组相同前缀的 commit，可手动调整选择范围，确认后合并为一条，保持提交历史整洁
+
+### Step 6: 发布到生产
+
+准备上线时，使用以下按钮：
+
+- **发布到生产环境**：基于最新的发布分支（前缀可配置，如 `release`、`hotfix`）创建当天发布分支，支持多选发布分支和需求分支进行合并
+
+或者一步完成整理和发布：
+
+- **合并提交并发布到生产环境**：先执行合并提交，再创建发布分支并合并当前分支
+
+---
+
+## 补充说明
+
+> 可在命令面板执行 `Quick Merge Jenkins: Open Config File` 快速打开配置文件。
+
+---
 
 ## 配置文件格式
 
-项目根目录：`.quick-merge.jsonc`（支持注释，兼容旧版 `.quick-merge.json`）
+项目根目录：`.quick-merge.jsonc`（支持注释）
 
 示例：
 
 ```jsonc
 {
-  // 需求分支创建设置（基于最新 release_YYYYMMDD 分支创建）
+  // Demand branch settings (created from latest release_YYYYMMDD branch)
   "demandBranch": {
+    // Demand type list
     "types": [
+      // prefix: branch prefix, commitPrefix: commit message prefix
       { "prefix": "feature", "commitPrefix": "feat" },
       { "prefix": "fix", "commitPrefix": "fix" }
     ],
+    // Base branch prefix for matching (default: release)
     "releasePrefix": "release",
+    // DeepSeek API key for auto-translation
     "deepseekApiKey": "",
+    // DeepSeek API base URL
     "deepseekBaseUrl": "https://api.deepseek.com/v1",
+    // DeepSeek model name
     "deepseekModel": "deepseek-chat"
   },
-  // 发布到测试环境配置
+  // Deploy to test environment config
   "deployToTest": {
+    // Target branch for merge (default: pre-test)
     "targetBranch": "pre-test",
+    // Jenkins trigger config
     "jenkins": {
+      // Jenkins base URL (without /job/...)
       "url": "https://jenkins.example.com",
+      // Job path in folder/jobName format
       "job": "team/release/deploy-test",
+      // Jenkins username
       "user": "jenkins-user",
+      // Jenkins API token
       "apiToken": "jenkins-api-token",
+      // Enable CSRF crumb (set true if Jenkins has CSRF enabled)
       "crumb": true,
+      // Build parameters (supports variables)
       "parameters": {
         "BRANCH": "${currentBranch}",
         "COMMIT": "${headCommit}",
@@ -58,8 +115,9 @@
       }
     }
   },
-  // 发布到生产环境配置（基于最新分支创建当天分支并合并）
+  // Deploy to production config (create today's branch from latest prefix branch)
   "deployToProd": {
+    // Branch prefix list for production releases
     "prodPrefix": ["release", "hotfix"]
   }
 }
@@ -88,7 +146,7 @@
 - `job`：Job 路径，使用 `folder/jobName` 形式
 - 认证方式（两选一）
   - `user` + `apiToken`（推荐）
-  - `token`（Job 里开启 “Trigger builds remotely”）
+  - `token`（Job 里开启 "Trigger builds remotely"）
 - `crumb`：Jenkins 开启 CSRF 时设为 `true`
 - `parameters`：触发参数，支持变量：
   - `${currentBranch}` `${sourceBranch}` `${targetBranch}` `${mergeCommit}` `${headCommit}` `${deployEnv}`

@@ -1,33 +1,76 @@
 # Quick Merge Jenkins
 
-Config-driven VSCode helper for test deployments and demand branch workflows. It reads `.quick-merge.jsonc` from the project root for optional settings.
+A config-driven VSCode helper for test deployments and demand branch workflows. Reads `.quick-merge.jsonc` from the project root for optional settings.
 
 [中文说明](README.zh-CN.md)
 
-## Features
+## Recommended Workflow
 
-- Deploy to test: merge current branch into target and trigger Jenkins
-- Deploy to pro: create today’s `releasePrefix_YYYYMMDD` branch from the latest release branch, then merge current branch
-- Conflict handling: list conflict files, open merge editor, return to original branch
-- Result details: merge summary (commit, changed files, duration), push + Jenkins status
-- Demand branch creation: choose feature/fix + Chinese description, auto-translate and create a branch
-- Commit changes: reuse the demand message for quick commits
-- Squash commits: squash recent commits with the same base message
-- Squash & deploy to prod: squash commits, then create today’s release branch and merge current branch
+This tool is designed around the typical development workflow. Here's a step-by-step guide:
 
-## Usage
+### Step 1: Initialize Config
 
-1. Open the project folder, click the **Quick Merge Jenkins** icon in the sidebar
-2. Click "Create base config" to generate `.quick-merge.jsonc` if needed
-3. Click "Deploy to test" or "Create Demand Branch" (and other buttons as needed)
-4. If you need to adjust settings, open the config file and update it
+When using for the first time, click the **Quick Merge Jenkins** icon in the sidebar. If the project is not configured:
 
-> Note: Config is read dynamically when running deploy/test or demand-branch actions. Refresh only updates the sidebar state; there is no automatic file watching.
-> You can also run `Quick Merge Jenkins: Open Config File` from the Command Palette.
+- **Create base config**: Generate a `.quick-merge.jsonc` config template in the project root. Customize Jenkins URL, branch settings, etc. as needed.
 
-## Config File
+### Step 2: Start a New Demand
 
-Project root: `.quick-merge.jsonc` (comments supported, legacy `.quick-merge.json` also works)
+When you receive a new requirement, create a demand branch:
+
+- **Create Demand Branch**: Select type (feature/fix), enter a Chinese description, auto-translate to English and create a new branch from the latest release branch
+  - Auto-translation uses DeepSeek API, requires `deepseekApiKey` in config
+  - Example: Enter "用户登录优化" → Creates branch `feature_user_login_optimization_20260116`
+
+### Step 3: Develop & Commit
+
+During development, use this button to commit code:
+
+- **Commit changes**: Reuse the demand description as the commit message for quick, standardized commits
+
+### Step 4: Deploy to Test
+
+After development, deploy to the test environment:
+
+- **Deploy to test**: Auto-merge current branch to target test branch (configurable, default `pre-test`) and trigger Jenkins build
+  - Shows merge result (commit, changed files, duration)
+  - Shows Jenkins trigger result
+
+#### Conflict Handling
+
+If conflicts occur during merge:
+
+- The tool lists all conflict files
+- Click a conflict file to open VS Code's built-in merge editor
+- After resolving, continue pushing, or click to return to original branch
+
+### Step 5: Squash Commits
+
+After testing passes, optionally clean up commit history before release:
+
+- **Squash commits**: Defaults to selecting recent commits with the same prefix on current branch. Manually adjust selection range, then confirm to squash into one commit for a clean history.
+
+### Step 6: Deploy to Production
+
+When ready to release:
+
+- **Deploy to prod**: Create today's release branch from the latest release branch (prefix configurable, e.g., `release`, `hotfix`). Supports multi-select for both release branches and demand branches to merge.
+
+Or complete squash and deploy in one step:
+
+- **Squash & deploy to prod**: First squash commits, then create release branch and merge current branch
+
+---
+
+## Additional Notes
+
+> Run `Quick Merge Jenkins: Open Config File` from the Command Palette to quickly open the config file.
+
+---
+
+## Config File Format
+
+Project root: `.quick-merge.jsonc` (supports comments)
 
 Example:
 
@@ -35,24 +78,38 @@ Example:
 {
   // Demand branch settings (created from latest release_YYYYMMDD branch)
   "demandBranch": {
+    // Demand type list
     "types": [
+      // prefix: branch prefix, commitPrefix: commit message prefix
       { "prefix": "feature", "commitPrefix": "feat" },
       { "prefix": "fix", "commitPrefix": "fix" }
     ],
+    // Base branch prefix for matching (default: release)
     "releasePrefix": "release",
+    // DeepSeek API key for auto-translation
     "deepseekApiKey": "",
+    // DeepSeek API base URL
     "deepseekBaseUrl": "https://api.deepseek.com/v1",
+    // DeepSeek model name
     "deepseekModel": "deepseek-chat"
   },
-  // Deploy to test environment
+  // Deploy to test environment config
   "deployToTest": {
+    // Target branch for merge (default: pre-test)
     "targetBranch": "pre-test",
+    // Jenkins trigger config
     "jenkins": {
+      // Jenkins base URL (without /job/...)
       "url": "https://jenkins.example.com",
+      // Job path in folder/jobName format
       "job": "team/release/deploy-test",
+      // Jenkins username
       "user": "jenkins-user",
+      // Jenkins API token
       "apiToken": "jenkins-api-token",
+      // Enable CSRF crumb (set true if Jenkins has CSRF enabled)
       "crumb": true,
+      // Build parameters (supports variables)
       "parameters": {
         "BRANCH": "${currentBranch}",
         "COMMIT": "${headCommit}",
@@ -60,8 +117,9 @@ Example:
       }
     }
   },
-  // Deploy to prod config (create today's branch from latest prefix branch then merge)
+  // Deploy to production config (create today's branch from latest prefix branch)
   "deployToProd": {
+    // Branch prefix list for production releases
     "prodPrefix": ["release", "hotfix"]
   }
 }
@@ -69,41 +127,41 @@ Example:
 
 ### Field Reference
 
-- `demandBranch`: demand branch settings (optional)
-  - demand branches are created from the latest `releasePrefix_YYYYMMDD` branch (remote preferred); if none, pick a branch
-  - `types`: demand type list (optional, defaults to feature/fix)
-    - `prefix`: branch prefix
-    - `commitPrefix`: commit message prefix (defaults to `prefix`)
-  - `releasePrefix`: base branch prefix (default `release`, also used for prod branch creation)
+- `demandBranch`: Demand branch settings (optional)
+- Demand branches are created from the latest `releasePrefix_YYYYMMDD` branch (remote preferred); if none found, prompts to select a branch as base
+  - `types`: Demand type list (optional, defaults to feature/fix)
+    - `prefix`: Branch prefix
+    - `commitPrefix`: Commit message prefix (defaults to `prefix`)
+  - `releasePrefix`: Base branch prefix for matching (default `release`, also used for prod branch creation)
   - `deepseekApiKey`: DeepSeek API key (can be stored in config)
   - `deepseekBaseUrl`: DeepSeek API base URL (default `https://api.deepseek.com/v1`)
   - `deepseekModel`: DeepSeek model name (default `deepseek-chat`)
-- `deployToTest`: deploy-to-test button config (optional)
-  - `targetBranch`: merge target branch (default `pre-test`)
+- `deployToTest`: Deploy-to-test config (optional)
+  - `targetBranch`: Merge target branch (default `pre-test`)
   - `jenkins`: Jenkins trigger config
-- `deployToProd`: deploy-to-prod config (optional)
-  - `prodPrefix`: branch prefix list (e.g. `release`, `hotfix`); clicking deploy shows the latest branch per prefix for multi-select
+- `deployToProd`: Deploy-to-prod config (optional)
+  - `prodPrefix`: Branch prefix list (e.g., `release`, `hotfix`); clicking deploy shows the latest branch per prefix for multi-select
 
 ### Jenkins Config
 
-- `url`: Jenkins base URL (no `/job/...`)
-- `job`: job path in `folder/jobName` form
+- `url`: Jenkins base URL (without `/job/...`)
+- `job`: Job path in `folder/jobName` format
 - Auth (choose one):
   - `user` + `apiToken` (recommended)
   - `token` (enable "Trigger builds remotely" in job config)
-- `crumb`: set `true` when CSRF is enabled
-- `parameters`: supports variables:
+- `crumb`: Set `true` when CSRF is enabled
+- `parameters`: Supports variables:
   - `${currentBranch}` `${sourceBranch}` `${targetBranch}` `${mergeCommit}` `${headCommit}` `${deployEnv}`
 
 ## Troubleshooting
 
-- Jenkins Crumb 403: verify `user` + `apiToken`, or set `crumb` to `false`
-- Push failed: check repo permissions and remote settings
+- Jenkins Crumb 403: Verify `user` + `apiToken` are correct, or set `crumb` to `false`
+- Push failed: Check repo permissions and remote settings
 
 ## Demand Branch Settings
 
-`demandBranch` in the config file takes precedence; you can also set fallback values in VS Code settings:
+Config file `demandBranch` takes precedence; you can also set fallback values in VS Code settings:
 
 - `quick-merge.deepseekApiKey`: DeepSeek API key
 - `quick-merge.deepseekBaseUrl`: API base URL (default `https://api.deepseek.com/v1`)
-- `quick-merge.deepseekModel`: model name (default `deepseek-chat`)
+- `quick-merge.deepseekModel`: Model name (default `deepseek-chat`)

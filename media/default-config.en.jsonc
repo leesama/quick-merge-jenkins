@@ -1,25 +1,40 @@
 {
   // Demand branch settings (created from latest release_YYYYMMDD branch)
   "demandBranch": {
+    // Demand type list
     "types": [
+      // prefix: branch prefix, commitPrefix: commit message prefix
       { "prefix": "feature", "commitPrefix": "feat" },
       { "prefix": "fix", "commitPrefix": "fix" }
     ],
+    // Base branch prefix for matching (default: release)
     "releasePrefix": "release",
+    // DeepSeek API key for auto-translation
     "deepseekApiKey": "",
+    // DeepSeek API base URL
     "deepseekBaseUrl": "https://api.deepseek.com/v1",
+    // DeepSeek model name
     "deepseekModel": "deepseek-chat"
   },
-  // Deploy to test (merge to targetBranch first, then trigger Jenkins)
+  // Deploy to test environment config
   "deployToTest": {
+    // Target branch for merge (default: pre-test)
     "targetBranch": "pre-test",
+    // Jenkins trigger config
     "jenkins": {
+      // Jenkins base URL (without /job/...)
       "url": "https://jenkins.example.com",
+      // Job path in folder/jobName format
       "job": "team/release/deploy-test",
+      // Remote trigger token (if using "Trigger builds remotely")
       "token": "",
+      // Jenkins username (recommended with apiToken)
       "user": "",
+      // Jenkins API token
       "apiToken": "",
+      // Enable CSRF crumb (set true if Jenkins has CSRF enabled)
       "crumb": true,
+      // Build parameters (supports variables: ${currentBranch}, ${headCommit}, ${deployEnv}, etc.)
       "parameters": {
         "BRANCH": "${currentBranch}",
         "COMMIT": "${headCommit}",
@@ -27,9 +42,9 @@
       }
     }
   },
-  // Deploy to prod config (create today's branch from latest prefix branch then merge)
+  // Deploy to production config (create today's branch from latest prefix branch)
   "deployToProd": {
+    // Branch prefix list for production releases
     "prodPrefix": ["release"]
   }
-  // Add more fields if needed
 }

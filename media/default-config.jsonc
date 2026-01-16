@@ -1,25 +1,40 @@
 {
   // 需求分支创建设置（基于最新 release_YYYYMMDD 分支创建）
   "demandBranch": {
+    // 需求类型列表
     "types": [
+      // prefix: 分支前缀, commitPrefix: 提交信息前缀
       { "prefix": "feature", "commitPrefix": "feat" },
       { "prefix": "fix", "commitPrefix": "fix" }
     ],
+    // 基准分支前缀（默认 release）
     "releasePrefix": "release",
+    // DeepSeek API Key（用于自动翻译）
     "deepseekApiKey": "",
+    // DeepSeek API 地址
     "deepseekBaseUrl": "https://api.deepseek.com/v1",
+    // DeepSeek 模型名
     "deepseekModel": "deepseek-chat"
   },
-  // 发布到测试环境按钮配置（先合并到 targetBranch，再触发 Jenkins）
+  // 发布到测试环境配置
   "deployToTest": {
+    // 合并目标分支（默认 pre-test）
     "targetBranch": "pre-test",
+    // Jenkins 触发配置
     "jenkins": {
+      // Jenkins 根地址（不要包含 /job/...）
       "url": "https://jenkins.example.com",
+      // Job 路径，使用 folder/jobName 形式
       "job": "team/release/deploy-test",
+      // 远程触发 Token（如使用 "Trigger builds remotely"）
       "token": "",
+      // Jenkins 用户名（推荐配合 apiToken 使用）
       "user": "",
+      // Jenkins API Token
       "apiToken": "",
+      // Jenkins 开启 CSRF 时设为 true
       "crumb": true,
+      // 构建参数（支持变量：${currentBranch}、${headCommit}、${deployEnv} 等）
       "parameters": {
         "BRANCH": "${currentBranch}",
         "COMMIT": "${headCommit}",
@@ -29,7 +44,7 @@
   },
   // 发布到生产环境配置（基于最新分支创建当天分支并合并）
   "deployToProd": {
+    // 发布分支前缀数组
     "prodPrefix": ["release"]
   }
-  // 可按需添加更多配置字段
 }
