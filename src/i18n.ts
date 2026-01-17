@@ -1,5 +1,3 @@
-import * as vscode from "vscode";
-
 type Locale = "zh" | "en";
 
 const MESSAGES = {
@@ -408,7 +406,7 @@ const MESSAGES = {
 export type MessageKey = keyof typeof MESSAGES;
 
 export function getLocale(): Locale {
-  const lang = vscode.env.language.toLowerCase();
+  const lang = getVscodeLanguage();
   return lang.startsWith("zh") ? "zh" : "en";
 }
 
@@ -515,4 +513,15 @@ export function getWebviewStrings(): WebviewStrings {
     configErrorMessage: t("configErrorMessage"),
     listSeparator: t("listSeparator"),
   };
+}
+
+function getVscodeLanguage(): string {
+  try {
+    const vscode = require("vscode") as typeof import("vscode");
+    const lang =
+      typeof vscode?.env?.language === "string" ? vscode.env.language : "";
+    return lang.toLowerCase();
+  } catch {
+    return "en";
+  }
 }
