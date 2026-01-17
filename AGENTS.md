@@ -8,6 +8,7 @@
 
 ## Build, Test, and Development Commands
 - `npm run compile`: 使用 `tsc` 将 `src/` 编译到 `dist/`，用于本地构建与发布前检查。
+- `npm run test`: 先编译再执行 `node --test` 单元测试（`src/__tests__/`）。
 - `npm run watch`: 监听模式编译，适合本地调试。
 - `npm run vscode:prepublish`: 发布前编译（`vsce` 调用）。
 - `npm run publish:all`/`npm run publish:ovsx`: 发布到 VS Code Marketplace 与 Open VSX。
@@ -20,9 +21,8 @@
 - 当前未配置格式化或 lint 工具，提交前请保持与现有风格一致。
 
 ## Testing Guidelines
-- 仓库目前未包含自动化测试脚本或测试目录。
+- 单元测试位于 `src/__tests__/`，使用 `npm run test` 运行。
 - 变更后请至少通过本地编译，并在 VS Code 扩展调试环境中验证：侧边栏视图渲染、`.quick-merge.jsonc` 读取、合并流程与 Jenkins 触发是否正常。
-- 若新增测试，请明确测试入口与运行方式，并更新本文件的测试说明。
 
 ## Commit & Pull Request Guidelines
 - 现有提交信息以 `feat:`、`chore:`、`docs:` 为主，也可见版本号提交如 `1.0.3`；新增提交请沿用该前缀风格，示例：`feat: add merge summary details`。

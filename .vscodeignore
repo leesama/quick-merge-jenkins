@@ -5,5 +5,7 @@ docs/**
 src/**
 **/*.ts
 **/*.map
+dist/**/__tests__/**
+dist/**/*.test.js
 tsconfig.json
 package-lock.json
