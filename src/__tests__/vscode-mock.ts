@@ -147,6 +147,65 @@ export const window = {
     }
     return items[0];
   },
+  createQuickPick<T>() {
+    const acceptListeners: Array<() => void> = [];
+    const hideListeners: Array<() => void> = [];
+    const quickPick = {
+      items: [] as T[],
+      selectedItems: [] as T[],
+      canSelectMany: false,
+      placeholder: "",
+      onDidAccept(callback: () => void) {
+        acceptListeners.push(callback);
+        return { dispose() {} };
+      },
+      onDidHide(callback: () => void) {
+        hideListeners.push(callback);
+        return { dispose() {} };
+      },
+      show() {
+        const next = mockState.quickPickQueue.shift();
+        if (typeof next === "function") {
+          const result = next(quickPick.items, {
+            canPickMany: quickPick.canSelectMany,
+          });
+          applyQuickPickResult(result);
+          return;
+        }
+        if (next !== undefined) {
+          applyQuickPickResult(next);
+          return;
+        }
+        if (quickPick.canSelectMany) {
+          quickPick.selectedItems =
+            quickPick.selectedItems.length > 0
+              ? quickPick.selectedItems
+              : quickPick.items.slice();
+        } else {
+          quickPick.selectedItems =
+            quickPick.items.length > 0 ? [quickPick.items[0]] : [];
+        }
+        acceptListeners.forEach((listener) => listener());
+      },
+      hide() {
+        hideListeners.forEach((listener) => listener());
+      },
+      dispose() {},
+    };
+    const applyQuickPickResult = (result: any) => {
+      if (result === undefined) {
+        quickPick.hide();
+        return;
+      }
+      if (Array.isArray(result)) {
+        quickPick.selectedItems = result;
+      } else {
+        quickPick.selectedItems = [result];
+      }
+      acceptListeners.forEach((listener) => listener());
+    };
+    return quickPick;
+  },
   async showInputBox(options?: { value?: string }) {
     mockState.showInputBoxCalls.push([options]);
     const next = mockState.inputBoxQueue.shift();

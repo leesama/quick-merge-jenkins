@@ -34,6 +34,10 @@ const MESSAGES = {
     zh: "确认提交代码？提交信息：{demandMessage}",
     en: "Confirm commit? Message: {demandMessage}",
   },
+  commitFilesPlaceholder: {
+    zh: "选择要提交的文件（默认全选）",
+    en: "Select files to commit (all selected by default)",
+  },
   commitMessagePrompt: {
     zh: "确认或修改提交信息",
     en: "Confirm or edit commit message",

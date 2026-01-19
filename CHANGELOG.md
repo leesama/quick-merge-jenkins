@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.3
+
+- 提交代码流程调整为先选文件再输入提交信息
+
 ## 1.0.3
 
 - 新增发布脚本：`release:patch`、`release:minor`、`release:major`

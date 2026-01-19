@@ -237,6 +237,11 @@ export async function commitDemandCode(
       ? activeRepoRoot
       : repoRoots[0];
   const cwd = requestedRepoRoot ?? defaultRepoRoot;
+  const selectedPaths = await selectCommitPaths(cwd, notifyInfo);
+  if (!selectedPaths) {
+    return;
+  }
+
   const storedDemandMessage = getDemandMessage(deps, cwd);
   let lastCommitMessage = "";
   try {
@@ -273,14 +278,15 @@ export async function commitDemandCode(
     return;
   }
   try {
-    await runGit(["add", "-A"], cwd);
-    const status = await runGit(["status", "--porcelain"], cwd);
-    if (!status.stdout.trim()) {
-      notifyInfo(t("commitNoChanges"));
+    const committed = await commitSelectedPaths(
+      cwd,
+      selectedPaths,
+      commitMessage,
+      notifyInfo
+    );
+    if (!committed) {
       return;
     }
-    await runGit(["commit", "-m", commitMessage], cwd);
-    notifyInfo(t("commitSuccess", { message: commitMessage }));
   } catch (error) {
     notifyError(getErrorMessage(error));
   }
@@ -321,6 +327,11 @@ export async function confirmCommitAndDeploy(
       : repoRoots[0];
   const cwd = requestedRepoRoot ?? defaultRepoRoot;
 
+  const selectedPaths = await selectCommitPaths(cwd, notifyInfo);
+  if (!selectedPaths) {
+    return;
+  }
+
   const storedDemandMessage = getDemandMessage(deps, cwd);
   let lastCommitMessage = "";
   try {
@@ -359,14 +370,15 @@ export async function confirmCommitAndDeploy(
   }
 
   try {
-    await runGit(["add", "-A"], cwd);
-    const status = await runGit(["status", "--porcelain"], cwd);
-    if (!status.stdout.trim()) {
-      notifyInfo(t("commitNoChanges"));
+    const committed = await commitSelectedPaths(
+      cwd,
+      selectedPaths,
+      commitMessage,
+      notifyInfo
+    );
+    if (!committed) {
       return;
     }
-    await runGit(["commit", "-m", commitMessage], cwd);
-    notifyInfo(t("commitSuccess", { message: commitMessage }));
   } catch (error) {
     notifyError(getErrorMessage(error));
     return;
@@ -410,4 +422,147 @@ export async function getLastCommitMessage(cwd: string): Promise<string> {
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
   return lines[0] ?? "";
+}
+
+type CommitFilePick = vscode.QuickPickItem & { paths: string[] };
+
+type StatusEntry = {
+  status: string;
+  label: string;
+  paths: string[];
+};
+
+async function selectCommitPaths(
+  cwd: string,
+  notifyInfo: (message: string) => void
+): Promise<string[] | null> {
+  const status = await runGit(["status", "--porcelain", "-z"], cwd, {
+    trim: false,
+  });
+  const items = buildCommitFilePicks(status.stdout);
+  if (items.length === 0) {
+    notifyInfo(t("commitNoChanges"));
+    return null;
+  }
+  const selected = await pickCommitFiles(items);
+  if (!selected || selected.length === 0) {
+    return null;
+  }
+  const paths = uniquePaths(selected.flatMap((item) => item.paths));
+  if (paths.length === 0) {
+    return null;
+  }
+  return paths;
+}
+
+async function commitSelectedPaths(
+  cwd: string,
+  paths: string[],
+  commitMessage: string,
+  notifyInfo: (message: string) => void
+): Promise<boolean> {
+  if (paths.length === 0) {
+    return false;
+  }
+  await runGit(["reset"], cwd);
+  await runGit(["add", "-A", "--", ...paths], cwd);
+  const staged = await runGit(["status", "--porcelain"], cwd);
+  if (!staged.stdout.trim()) {
+    notifyInfo(t("commitNoChanges"));
+    return false;
+  }
+  await runGit(["commit", "-m", commitMessage], cwd);
+  notifyInfo(t("commitSuccess", { message: commitMessage }));
+  return true;
+}
+
+function buildCommitFilePicks(statusOutput: string): CommitFilePick[] {
+  const entries = parseStatusEntries(statusOutput);
+  return entries.map((entry) => ({
+    label: entry.label,
+    description: formatStatusLabel(entry.status),
+    paths: entry.paths,
+  }));
+}
+
+function parseStatusEntries(output: string): StatusEntry[] {
+  if (!output) {
+    return [];
+  }
+  const tokens = output.split("\0").filter((token) => token.length > 0);
+  const entries: StatusEntry[] = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token.length < 3) {
+      continue;
+    }
+    const status = token.slice(0, 2);
+    const path = token.slice(3);
+    if (!path) {
+      continue;
+    }
+    if ((status.includes("R") || status.includes("C")) && i + 1 < tokens.length) {
+      const nextPath = tokens[i + 1];
+      i += 1;
+      if (!nextPath) {
+        continue;
+      }
+      entries.push({
+        status,
+        label: `${path} -> ${nextPath}`,
+        paths: [path, nextPath],
+      });
+      continue;
+    }
+    entries.push({
+      status,
+      label: path,
+      paths: [path],
+    });
+  }
+  return entries;
+}
+
+function formatStatusLabel(status: string): string | undefined {
+  const trimmed = status.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function uniquePaths(paths: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const path of paths) {
+    if (!path || seen.has(path)) {
+      continue;
+    }
+    seen.add(path);
+    result.push(path);
+  }
+  return result;
+}
+
+function pickCommitFiles(
+  items: CommitFilePick[]
+): Promise<CommitFilePick[] | undefined> {
+  return new Promise((resolve) => {
+    const quickPick = vscode.window.createQuickPick<CommitFilePick>();
+    let resolved = false;
+    quickPick.items = items;
+    quickPick.canSelectMany = true;
+    quickPick.selectedItems = items;
+    quickPick.placeholder = t("commitFilesPlaceholder");
+    quickPick.onDidAccept(() => {
+      resolved = true;
+      const selected = [...quickPick.selectedItems];
+      quickPick.hide();
+      resolve(selected);
+    });
+    quickPick.onDidHide(() => {
+      if (!resolved) {
+        resolve(undefined);
+      }
+      quickPick.dispose();
+    });
+    quickPick.show();
+  });
 }

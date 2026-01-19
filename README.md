@@ -28,7 +28,7 @@ When you receive a new requirement, create a demand branch:
 
 During development, use this button to commit code:
 
-- **Commit changes**: Reuse the demand description as the commit message for quick, standardized commits
+- **Commit changes**: Select files to commit first, then confirm/edit the commit message (defaults to the demand description)
 
 ### Step 4: Deploy to Test
 

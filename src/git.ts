@@ -79,17 +79,23 @@ export async function listChangedFiles(
 
 export async function runGit(
   args: string[],
-  cwd: string
+  cwd: string,
+  options: { trim?: boolean } = {}
 ): Promise<{ stdout: string; stderr: string }> {
+  const shouldTrim = options.trim !== false;
   try {
     const { stdout, stderr } = await execFileAsync("git", args, { cwd });
+    const rawStdout = stdout?.toString() ?? "";
+    const rawStderr = stderr?.toString() ?? "";
     return {
-      stdout: stdout?.toString().trim() ?? "",
-      stderr: stderr?.toString().trim() ?? "",
+      stdout: shouldTrim ? rawStdout.trim() : rawStdout,
+      stderr: shouldTrim ? rawStderr.trim() : rawStderr,
     };
   } catch (error: any) {
-    const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : "";
-    const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : "";
+    const stderrRaw = typeof error?.stderr === "string" ? error.stderr : "";
+    const stdoutRaw = typeof error?.stdout === "string" ? error.stdout : "";
+    const stderr = shouldTrim ? stderrRaw.trim() : stderrRaw;
+    const stdout = shouldTrim ? stdoutRaw.trim() : stdoutRaw;
     const message = stderr || stdout || error?.message || t("gitCommandFailed");
     const err = new Error(message);
     (err as any).stderr = stderr;
