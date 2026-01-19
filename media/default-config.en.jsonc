@@ -26,8 +26,6 @@
       "url": "https://jenkins.example.com",
       // Job path in folder/jobName format
       "job": "team/release/deploy-test",
-      // Remote trigger token (if using "Trigger builds remotely")
-      "token": "",
       // Jenkins username (recommended with apiToken)
       "user": "",
       // Jenkins API token

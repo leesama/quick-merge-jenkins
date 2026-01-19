@@ -14,9 +14,6 @@ export async function triggerJenkinsBuild(
   const hasParams = Object.keys(params).length > 0;
   const endpoint = hasParams ? "buildWithParameters" : "build";
   const url = new URL(`${baseUrl}${jobPath}/${endpoint}`);
-  if (config.token) {
-    url.searchParams.append("token", config.token);
-  }
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.append(key, value);
   }

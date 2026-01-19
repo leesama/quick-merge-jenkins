@@ -148,9 +148,7 @@ Example:
 
 - `url`: Jenkins base URL (without `/job/...`)
 - `job`: Job path in `folder/jobName` format
-- Auth (choose one):
-  - `user` + `apiToken` (recommended)
-  - `token` (enable "Trigger builds remotely" in job config)
+- `user` + `apiToken`: Jenkins user auth (recommended, API token at `http://192.168.1.169:8080/user/admin/security/`)
 - `crumb`: Set `true` when CSRF is enabled
 - `parameters`: Supports variables:
   - `${currentBranch}` `${sourceBranch}` `${targetBranch}` `${mergeCommit}` `${headCommit}` `${deployEnv}`

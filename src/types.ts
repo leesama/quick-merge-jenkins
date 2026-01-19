@@ -39,7 +39,6 @@ export interface JenkinsConfig {
   url: string;
   job: string;
   enabled?: boolean;
-  token?: string;
   user?: string;
   apiToken?: string;
   crumb?: boolean;

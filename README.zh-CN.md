@@ -146,9 +146,7 @@
 
 - `url`：Jenkins 根地址（不要包含 `/job/...`）
 - `job`：Job 路径，使用 `folder/jobName` 形式
-- 认证方式（两选一）
-  - `user` + `apiToken`（推荐）
-  - `token`（Job 里开启 "Trigger builds remotely"）
+- `user` + `apiToken`：Jenkins 用户认证（推荐，API Token 获取地址：`http://192.168.1.169:8080/user/admin/security/`）
 - `crumb`：Jenkins 开启 CSRF 时设为 `true`
 - `parameters`：触发参数，支持变量：
   - `${currentBranch}` `${sourceBranch}` `${targetBranch}` `${mergeCommit}` `${headCommit}` `${deployEnv}`

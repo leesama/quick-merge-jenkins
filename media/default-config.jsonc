@@ -26,8 +26,6 @@
       "url": "https://jenkins.example.com",
       // Job 路径，使用 folder/jobName 形式
       "job": "team/release/deploy-test",
-      // 远程触发 Token（如使用 "Trigger builds remotely"）
-      "token": "",
       // Jenkins 用户名（推荐配合 apiToken 使用）
       "user": "",
       // Jenkins API Token
