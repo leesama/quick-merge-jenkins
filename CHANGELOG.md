@@ -2,21 +2,21 @@
 
 ## 2.0.3
 
-- 提交代码流程调整为先选文件再输入提交信息
+- Update commit flow to select files before entering the commit message.
 
 ## 1.0.3
 
-- 新增发布脚本：`release:patch`、`release:minor`、`release:major`
-- 调整刷新功能文案说明
+- Add release scripts: `release:patch`, `release:minor`, `release:major`.
+- Update refresh action copy.
 
 ## 1.0.0
 
-- 初始稳定版发布
-- 配置驱动的合并流程与冲突处理
-- 多配置按钮与 Jenkins 触发
+- Initial stable release.
+- Configuration-driven merge flow and conflict handling.
+- Multiple config buttons and Jenkins trigger.
 
 ## 0.0.1
 
-- 初始发布
-- 配置驱动的合并流程与冲突处理
-- 支持多配置按钮与 Jenkins 触发
+- Initial release.
+- Configuration-driven merge flow and conflict handling.
+- Support multiple config buttons and Jenkins trigger.
