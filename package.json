@@ -78,8 +78,9 @@
     "test": "npm run compile && node --test --test-concurrency=1 --require ./dist/__tests__/setup-vscode.js dist/**/*.test.js",
     "watch": "tsc -watch -p ./",
     "vscode:prepublish": "npm run compile",
+    "publish:vsce": "vsce publish",
     "publish:ovsx": "ovsx publish",
-    "publish:all": "vsce publish && ovsx publish",
+    "publish:all": "npm run publish:vsce; npm run publish:ovsx",
     "release:patch": "npm version patch && npm run publish:all",
     "release:minor": "npm version minor && npm run publish:all",
     "release:major": "npm version major && npm run publish:all"
