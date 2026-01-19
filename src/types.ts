@@ -31,6 +31,7 @@ export interface MergeFailure {
 
 export interface MergeConfigFile {
   demandBranch?: DemandBranchConfig;
+  commit?: CommitConfig;
   deployToTest?: DeployConfig;
   deployToProd?: DeployProdConfig;
 }
@@ -92,4 +93,8 @@ export interface DemandBranchConfig {
   deepseekBaseUrl?: string;
   deepseekModel?: string;
   commitPrefixes?: Record<string, string>;
+}
+
+export interface CommitConfig {
+  pushAfterCommit?: boolean;
 }

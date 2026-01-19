@@ -83,7 +83,10 @@
     "publish:all": "npm run publish:vsce; npm run publish:ovsx",
     "release:patch": "npm version patch && npm run publish:all",
     "release:minor": "npm version minor && npm run publish:all",
-    "release:major": "npm version major && npm run publish:all"
+    "release:major": "npm version major && npm run publish:all",
+    "tag:patch": "npm version patch && git push && git push --tags",
+    "tag:minor": "npm version minor && git push && git push --tags",
+    "tag:major": "npm version major && git push && git push --tags"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

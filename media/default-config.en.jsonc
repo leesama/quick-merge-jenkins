@@ -16,6 +16,11 @@
     // DeepSeek model name
     "deepseekModel": "deepseek-chat"
   },
+  // Commit settings
+  "commit": {
+    // Push after commit (default: true)
+    "pushAfterCommit": true
+  },
   // Deploy to test environment config
   "deployToTest": {
     // Target branch for merge (default: pre-test)

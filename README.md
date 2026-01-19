@@ -95,6 +95,11 @@ Example:
     // DeepSeek model name
     "deepseekModel": "deepseek-chat"
   },
+  // Commit settings
+  "commit": {
+    // Push after commit (default: true)
+    "pushAfterCommit": true
+  },
   // Deploy to test environment config
   "deployToTest": {
     // Target branch for merge (default: pre-test)
@@ -141,6 +146,8 @@ Example:
 - `deployToTest`: Deploy-to-test config (optional)
   - `targetBranch`: Merge target branch (default `pre-test`)
   - `jenkins`: Jenkins trigger config
+- `commit`: Commit config (optional)
+  - `pushAfterCommit`: Push after commit (default `true`)
 - `deployToProd`: Deploy-to-prod config (optional)
   - `prodPrefix`: Branch prefix list (e.g., `release`, `hotfix`); clicking deploy shows the latest branch per prefix for multi-select
 

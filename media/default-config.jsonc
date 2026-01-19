@@ -16,6 +16,11 @@
     // DeepSeek 模型名
     "deepseekModel": "deepseek-chat"
   },
+  // 提交设置
+  "commit": {
+    // 是否在提交后自动推送（默认 true）
+    "pushAfterCommit": true
+  },
   // 发布到测试环境配置
   "deployToTest": {
     // 合并目标分支（默认 pre-test）

@@ -7,7 +7,14 @@ import {
   pickBaseCommitMessage,
   toBranchSlug,
 } from "../extension-utils";
-import { listBranches, listRemoteBranches, runGit } from "../git";
+import {
+  getCurrentBranch,
+  getDefaultRemote,
+  listBranches,
+  listRemoteBranches,
+  listRemotes,
+  runGit,
+} from "../git";
 import { t } from "../i18n";
 import { translateToEnglish } from "../deepseek";
 import { getWorkspaceRoot, resolveRepoRoot, resolveRepoRoots } from "../repo";
@@ -17,6 +24,7 @@ import { getErrorMessage } from "../utils";
 import { resolveDemandBranchSettings } from "../demand-settings";
 import { getLatestReleaseBranch } from "../release-branch";
 import { readMergeConfig } from "../config";
+import { resolveCommitSettings } from "../commit-settings";
 import { handleDeployTest } from "./deploy-actions";
 import type { ActionDeps } from "./action-types";
 
@@ -237,6 +245,12 @@ export async function commitDemandCode(
       ? activeRepoRoot
       : repoRoots[0];
   const cwd = requestedRepoRoot ?? defaultRepoRoot;
+  let configFile: MergeConfigFile | null = null;
+  try {
+    configFile = await readMergeConfig(cwd);
+  } catch {
+    configFile = null;
+  }
   const selectedPaths = await selectCommitPaths(cwd, notifyInfo);
   if (!selectedPaths) {
     return;
@@ -287,6 +301,7 @@ export async function commitDemandCode(
     if (!committed) {
       return;
     }
+    await pushAfterCommitIfNeeded(cwd, notifyInfo, notifyError, configFile);
   } catch (error) {
     notifyError(getErrorMessage(error));
   }
@@ -326,6 +341,12 @@ export async function confirmCommitAndDeploy(
       ? activeRepoRoot
       : repoRoots[0];
   const cwd = requestedRepoRoot ?? defaultRepoRoot;
+  let configFile: MergeConfigFile | null = null;
+  try {
+    configFile = await readMergeConfig(cwd);
+  } catch {
+    configFile = null;
+  }
 
   const selectedPaths = await selectCommitPaths(cwd, notifyInfo);
   if (!selectedPaths) {
@@ -379,6 +400,7 @@ export async function confirmCommitAndDeploy(
     if (!committed) {
       return;
     }
+    await pushAfterCommitIfNeeded(cwd, notifyInfo, notifyError, configFile);
   } catch (error) {
     notifyError(getErrorMessage(error));
     return;
@@ -474,6 +496,55 @@ async function commitSelectedPaths(
   await runGit(["commit", "-m", commitMessage], cwd);
   notifyInfo(t("commitSuccess", { message: commitMessage }));
   return true;
+}
+
+async function pushAfterCommitIfNeeded(
+  cwd: string,
+  notifyInfo: (message: string) => void,
+  notifyError: (message: string) => void,
+  configFile: MergeConfigFile | null
+): Promise<void> {
+  const settings = resolveCommitSettings(configFile);
+  if (!settings.pushAfterCommit) {
+    return;
+  }
+  const upstreamRemote = await getUpstreamRemote(cwd);
+  try {
+    if (upstreamRemote) {
+      await runGit(["push"], cwd);
+      notifyInfo(t("pushOk", { remote: upstreamRemote }));
+      return;
+    }
+    const remotes = await listRemotes(cwd).catch(() => []);
+    const defaultRemote = getDefaultRemote(remotes);
+    if (!defaultRemote) {
+      notifyError(t("remoteMissing"));
+      return;
+    }
+    const branch = await getCurrentBranch(cwd).catch(() => "");
+    if (!branch) {
+      notifyError(t("currentBranchMissing"));
+      return;
+    }
+    await runGit(["push", "-u", defaultRemote, branch], cwd);
+    notifyInfo(t("pushOk", { remote: defaultRemote }));
+  } catch (error) {
+    notifyError(t("pushFailed", { error: getErrorMessage(error) }));
+  }
+}
+
+async function getUpstreamRemote(cwd: string): Promise<string | null> {
+  try {
+    const result = await runGit(
+      ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+      cwd
+    );
+    const upstream = result.stdout.trim();
+    const remote = upstream.split("/")[0] ?? "";
+    return remote || null;
+  } catch {
+    return null;
+  }
 }
 
 function buildCommitFilePicks(statusOutput: string): CommitFilePick[] {

@@ -69,6 +69,10 @@ const MESSAGES = {
     zh: "无法获取当前分支。",
     en: "Unable to get current branch.",
   },
+  remoteMissing: {
+    zh: "未找到可用的远端。",
+    en: "No remote found.",
+  },
   jenkinsMissingConfig: {
     zh: "Jenkins 配置缺少 url 或 job。",
     en: "Jenkins config missing url or job.",
@@ -396,6 +400,10 @@ const MESSAGES = {
   mergeFailedSummary: {
     zh: "合并: 失败 | 推送: 未执行 | Jenkins: 未执行 | 切回: 未执行",
     en: "Merge: Failed | Push: Not run | Jenkins: Not run | Checkout: Not run",
+  },
+  remoteBranchDiverged: {
+    zh: "分支 {branch} 与远端 {remote} 已分叉，请先同步。",
+    en: "Branch {branch} has diverged from remote {remote}. Please sync first.",
   },
   mergeErrorLabel: { zh: "错误: {error}", en: "Error: {error}" },
   conflictFilesLabel: { zh: "冲突文件:", en: "Conflict files:" },

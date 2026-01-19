@@ -93,6 +93,11 @@
     // DeepSeek model name
     "deepseekModel": "deepseek-chat"
   },
+  // Commit settings
+  "commit": {
+    // Push after commit (default: true)
+    "pushAfterCommit": true
+  },
   // Deploy to test environment config
   "deployToTest": {
     // Target branch for merge (default: pre-test)
@@ -139,6 +144,8 @@
 - `deployToTest`：发布到测试环境配置（可选）
   - `targetBranch`：合并目标分支（默认 `pre-test`）
   - `jenkins`：Jenkins 触发配置
+- `commit`：提交设置（可选）
+  - `pushAfterCommit`：提交后是否自动推送（默认 `true`）
 - `deployToProd`：发布到生产环境配置（可选）
   - `prodPrefix`：发布分支前缀数组（例如 `release`、`hotfix`），点击发布时会列出各前缀最新分支供多选
 

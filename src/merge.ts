@@ -5,6 +5,7 @@ import {
   listConflicts,
   runGit,
 } from "./git";
+import { t } from "./i18n";
 import { triggerJenkinsBuild } from "./jenkins";
 import { getErrorMessage } from "./utils";
 import { MergeResult, ResolvedMergePlan, JenkinsConfig } from "./types";
@@ -18,6 +19,18 @@ export async function performMerge(
   const targetBranch = plan.targetBranch;
 
   await runGit(["checkout", targetBranch], cwd);
+  try {
+    await syncRemoteTargetBranch(cwd, plan.pushRemote, targetBranch);
+  } catch (error) {
+    return {
+      status: "failed",
+      currentBranch,
+      targetBranch,
+      errorMessage: getErrorMessage(error),
+      conflicts: [],
+      durationMs: Date.now() - start,
+    };
+  }
   const targetBefore = await getHeadCommit(cwd);
 
   try {
@@ -103,5 +116,62 @@ export async function performMerge(
     jenkinsStatus,
     jenkinsJob,
     jenkinsError,
+  };
+}
+
+async function syncRemoteTargetBranch(
+  cwd: string,
+  remote: string | null,
+  targetBranch: string
+): Promise<void> {
+  if (!remote) {
+    return;
+  }
+  await runGit(["fetch", remote], cwd);
+  const exists = await remoteBranchExists(cwd, remote, targetBranch);
+  if (!exists) {
+    return;
+  }
+  const remoteRef = `${remote}/${targetBranch}`;
+  const { behind, ahead } = await getAheadBehind(cwd, remoteRef, targetBranch);
+  if (behind > 0 && ahead > 0) {
+    throw new Error(
+      t("remoteBranchDiverged", { branch: targetBranch, remote })
+    );
+  }
+  if (behind > 0) {
+    await runGit(["merge", "--ff-only", remoteRef], cwd);
+  }
+}
+
+async function remoteBranchExists(
+  cwd: string,
+  remote: string,
+  branch: string
+): Promise<boolean> {
+  const ref = `refs/remotes/${remote}/${branch}`;
+  try {
+    await runGit(["show-ref", "--verify", "--quiet", ref], cwd);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function getAheadBehind(
+  cwd: string,
+  remoteRef: string,
+  localRef: string
+): Promise<{ behind: number; ahead: number }> {
+  const result = await runGit(
+    ["rev-list", "--left-right", "--count", `${remoteRef}...${localRef}`],
+    cwd
+  );
+  const parts = result.stdout.trim().split(/\s+/);
+  const behind = Number(parts[0] ?? "0");
+  const ahead = Number(parts[1] ?? "0");
+  return {
+    behind: Number.isNaN(behind) ? 0 : behind,
+    ahead: Number.isNaN(ahead) ? 0 : ahead,
   };
 }
