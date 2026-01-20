@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.9
+
+- Add "Merge to test" action to sync remote, merge into test branch, and push without Jenkins.
+
 ## 2.0.7
 
 - Support auto-push to remote after commit. Set `pushAfterCommit` to `false` to disable this feature.
