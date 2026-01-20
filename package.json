@@ -2,7 +2,7 @@
   "name": "quick-merge-jenkins",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "2.0.7",
+  "version": "2.0.8",
   "publisher": "leesama-tools",
   "engines": {
     "vscode": "^1.85.0"
