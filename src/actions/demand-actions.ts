@@ -510,19 +510,14 @@ async function pushAfterCommitIfNeeded(
   }
   const upstreamRemote = await getUpstreamRemote(cwd);
   try {
-    if (upstreamRemote) {
-      await runGit(["push"], cwd);
-      notifyInfo(t("pushOk", { remote: upstreamRemote }));
-      return;
-    }
-    const remotes = await listRemotes(cwd).catch(() => []);
-    const defaultRemote = getDefaultRemote(remotes);
+    const remotes = upstreamRemote ? [] : await listRemotes(cwd).catch(() => []);
+    const defaultRemote = upstreamRemote ?? getDefaultRemote(remotes);
     if (!defaultRemote) {
       notifyError(t("remoteMissing"));
       return;
     }
     const branch = await getCurrentBranch(cwd).catch(() => "");
-    if (!branch) {
+    if (!branch || branch === "HEAD") {
       notifyError(t("currentBranchMissing"));
       return;
     }
