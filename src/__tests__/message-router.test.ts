@@ -21,6 +21,7 @@ function createDeps(): {
   const spies = {
     postState: createAsyncSpy(),
     handleDeployTest: createAsyncSpy(),
+    handleMergeToTest: createAsyncSpy(),
     handleDeployProd: createAsyncSpy(),
     handleSquashDeployProd: createAsyncSpy(),
     confirmDeployTest: createAsyncSpy(),
@@ -36,6 +37,7 @@ function createDeps(): {
   const deps: WebviewMessageHandlerDeps = {
     postState: spies.postState.fn,
     handleDeployTest: spies.handleDeployTest.fn,
+    handleMergeToTest: spies.handleMergeToTest.fn,
     handleDeployProd: spies.handleDeployProd.fn,
     handleSquashDeployProd: spies.handleSquashDeployProd.fn,
     confirmDeployTest: spies.confirmDeployTest.fn,
@@ -67,6 +69,15 @@ test("handleWebviewMessage routes deployProd with repoRoot", async () => {
   );
   assert.equal(spies.handleDeployProd.calls.length, 1);
   assert.deepEqual(spies.handleDeployProd.calls[0], ["/tmp/repo"]);
+});
+
+test("handleWebviewMessage routes mergeToTest", async () => {
+  const { deps, spies } = createDeps();
+  await handleWebviewMessage({ type: "mergeToTest", repoRoot: "/tmp/repo" }, deps);
+  assert.equal(spies.handleMergeToTest.calls.length, 1);
+  assert.deepEqual(spies.handleMergeToTest.calls[0], [
+    { type: "mergeToTest", repoRoot: "/tmp/repo" },
+  ]);
 });
 
 test("handleWebviewMessage routes openConfig without repoRoot", async () => {

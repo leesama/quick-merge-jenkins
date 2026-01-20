@@ -1,3 +1,4 @@
+import { getDefaultRemote } from "./git";
 import { JenkinsConfig, MergeConfigFile, ResolvedMergePlan } from "./types";
 
 export type DeployTestPlanError =
@@ -21,6 +22,18 @@ export interface DeployTestPlanInput {
   currentBranch: string | null;
   remotes: string[];
 }
+
+export type MergeToTestPlanError = "missing-branch" | "missing-remote";
+
+export type MergeToTestPlanResult =
+  | {
+      status: "ok";
+      plan: ResolvedMergePlan;
+    }
+  | {
+      status: "error";
+      reason: MergeToTestPlanError;
+    };
 
 export function buildDeployTestPlan(
   input: DeployTestPlanInput
@@ -50,4 +63,33 @@ export function buildDeployTestPlan(
     jenkins: undefined,
   };
   return { status: "ok", plan, jenkins };
+}
+
+export function buildMergeToTestPlan(
+  input: DeployTestPlanInput
+): MergeToTestPlanResult {
+  const currentBranch = input.currentBranch?.trim() ?? "";
+  if (!currentBranch) {
+    return { status: "error", reason: "missing-branch" };
+  }
+  const deployConfig = input.configFile?.deployToTest;
+  let targetBranch = (deployConfig?.targetBranch ?? "pre-test").trim();
+  if (!targetBranch) {
+    targetBranch = "pre-test";
+  }
+  const pushRemote = getDefaultRemote(input.remotes);
+  if (!pushRemote) {
+    return { status: "error", reason: "missing-remote" };
+  }
+  const plan: ResolvedMergePlan = {
+    currentBranch,
+    sourceBranch: currentBranch,
+    targetBranch,
+    strategyFlag: "",
+    strategyLabel: "default",
+    pushAfterMerge: true,
+    pushRemote,
+    jenkins: undefined,
+  };
+  return { status: "ok", plan };
 }

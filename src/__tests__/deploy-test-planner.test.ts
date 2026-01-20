@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildDeployTestPlan } from "../deploy-test-planner";
+import { buildDeployTestPlan, buildMergeToTestPlan } from "../deploy-test-planner";
 
 test("buildDeployTestPlan returns error when config missing", () => {
   const result = buildDeployTestPlan({
@@ -64,5 +64,44 @@ test("buildDeployTestPlan builds merge plan and push intent", () => {
     assert.equal(result.plan.targetBranch, "pre-test");
     assert.equal(result.plan.pushAfterMerge, true);
     assert.equal(result.jenkins.job, "test");
+  }
+});
+
+test("buildMergeToTestPlan returns error when branch missing", () => {
+  const result = buildMergeToTestPlan({
+    configFile: null,
+    currentBranch: " ",
+    remotes: ["origin"],
+  });
+  assert.equal(result.status, "error");
+  if (result.status === "error") {
+    assert.equal(result.reason, "missing-branch");
+  }
+});
+
+test("buildMergeToTestPlan returns error when remote missing", () => {
+  const result = buildMergeToTestPlan({
+    configFile: null,
+    currentBranch: "feat/a",
+    remotes: [],
+  });
+  assert.equal(result.status, "error");
+  if (result.status === "error") {
+    assert.equal(result.reason, "missing-remote");
+  }
+});
+
+test("buildMergeToTestPlan builds merge plan with default target", () => {
+  const result = buildMergeToTestPlan({
+    configFile: null,
+    currentBranch: "feature/login",
+    remotes: ["origin"],
+  });
+  assert.equal(result.status, "ok");
+  if (result.status === "ok") {
+    assert.equal(result.plan.currentBranch, "feature/login");
+    assert.equal(result.plan.targetBranch, "pre-test");
+    assert.equal(result.plan.pushAfterMerge, true);
+    assert.equal(result.plan.pushRemote, "origin");
   }
 });

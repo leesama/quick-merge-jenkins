@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-import { buildDeployTestPlan } from "../deploy-test-planner";
+import { buildDeployTestPlan, buildMergeToTestPlan } from "../deploy-test-planner";
 import {
   getCurrentBranch,
   listBranches,
@@ -10,7 +10,7 @@ import {
 } from "../git";
 import { t } from "../i18n";
 import { triggerJenkinsBuild } from "../jenkins";
-import { performMerge } from "../merge";
+import { performMerge, syncRemoteBranch } from "../merge";
 import { getWorkspaceRoot, resolveRepoRoot, resolveRepoRoots } from "../repo";
 import { state } from "../state";
 import { MergeConfigFile, ResolvedMergePlan } from "../types";
@@ -18,7 +18,7 @@ import { getErrorMessage } from "../utils";
 import { resolveDemandBranchSettings } from "../demand-settings";
 import { getLatestReleaseBranch } from "../release-branch";
 import { formatDateStamp, normalizePrefixes } from "../extension-utils";
-import { readMergeConfig } from "../config";
+import { getConfigPathInfo, readMergeConfig } from "../config";
 import { handleRebaseSquash } from "./rebase-actions";
 import type { ActionDeps } from "./action-types";
 
@@ -119,6 +119,115 @@ export async function handleDeployTest(
     void vscode.window.showInformationMessage(successMessage);
   } catch (error) {
     const errorMessage = t("deployTestFailed", {
+      error: getErrorMessage(error),
+    });
+    deps.postMessage({
+      type: "error",
+      message: errorMessage,
+    });
+    void vscode.window.showErrorMessage(errorMessage);
+  } finally {
+    await deps.postState({ loadConfig: false });
+  }
+}
+
+export async function handleMergeToTest(
+  deps: ActionDeps,
+  message: any
+): Promise<void> {
+  const requestedRoot =
+    typeof message?.repoRoot === "string" ? message.repoRoot : undefined;
+  const cwd = requestedRoot ?? (await resolveRepoRoot());
+  if (!cwd) {
+    deps.postMessage({
+      type: "error",
+      message: t("workspaceMissingForMerge"),
+    });
+    return;
+  }
+  state.lastWorkspaceRoot = cwd;
+  deps.postMessage({
+    type: "mergeTestStarted",
+    message: t("mergeTestStarted"),
+  });
+  try {
+    let configFile: MergeConfigFile | null = null;
+    try {
+      const configInfo = await getConfigPathInfo(cwd);
+      if (configInfo.exists) {
+        configFile = await readMergeConfig(cwd);
+      }
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      deps.postMessage({
+        type: "error",
+        message: errorMessage,
+      });
+      void vscode.window.showErrorMessage(errorMessage);
+      return;
+    }
+    const [currentBranch, remotes] = await Promise.all([
+      getCurrentBranch(cwd),
+      listRemotes(cwd),
+    ]);
+    const planResult = buildMergeToTestPlan({
+      configFile,
+      currentBranch,
+      remotes,
+    });
+    if (planResult.status === "error") {
+      const errorMessage =
+        planResult.reason === "missing-branch"
+          ? t("currentBranchMissing")
+          : t("remoteMissing");
+      deps.postMessage({
+        type: "error",
+        message: errorMessage,
+      });
+      void vscode.window.showErrorMessage(errorMessage);
+      return;
+    }
+    const { plan } = planResult;
+
+    await syncRemoteBranch(cwd, plan.pushRemote, plan.currentBranch);
+
+    const result = await performMerge(cwd, plan);
+    if (result.status === "failed") {
+      state.lastFailureContext = {
+        originalBranch: result.currentBranch,
+        targetBranch: result.targetBranch,
+        cwd,
+      };
+      state.lastConflictFiles = result.conflicts;
+      deps.postMessage({ type: "result", result });
+      void vscode.window.showErrorMessage(
+        t("mergeFailed", { error: result.errorMessage })
+      );
+      return;
+    }
+
+    deps.postMessage({ type: "result", result });
+
+    if (result.pushStatus === "failed") {
+      const errorMessage = t("pushFailed", {
+        error: result.pushError || t("genericError"),
+      });
+      deps.postMessage({
+        type: "error",
+        message: errorMessage,
+      });
+      void vscode.window.showErrorMessage(errorMessage);
+      return;
+    }
+
+    const successMessage = t("mergeSuccess", { target: plan.targetBranch });
+    deps.postMessage({
+      type: "info",
+      message: successMessage,
+    });
+    void vscode.window.showInformationMessage(successMessage);
+  } catch (error) {
+    const errorMessage = t("mergeFailed", {
       error: getErrorMessage(error),
     });
     deps.postMessage({

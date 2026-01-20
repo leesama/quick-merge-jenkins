@@ -20,7 +20,7 @@ export async function performMerge(
 
   await runGit(["checkout", targetBranch], cwd);
   try {
-    await syncRemoteTargetBranch(cwd, plan.pushRemote, targetBranch);
+    await syncRemoteBranch(cwd, plan.pushRemote, targetBranch);
   } catch (error) {
     return {
       status: "failed",
@@ -119,24 +119,24 @@ export async function performMerge(
   };
 }
 
-async function syncRemoteTargetBranch(
+export async function syncRemoteBranch(
   cwd: string,
   remote: string | null,
-  targetBranch: string
+  branch: string
 ): Promise<void> {
   if (!remote) {
     return;
   }
   await runGit(["fetch", remote], cwd);
-  const exists = await remoteBranchExists(cwd, remote, targetBranch);
+  const exists = await remoteBranchExists(cwd, remote, branch);
   if (!exists) {
     return;
   }
-  const remoteRef = `${remote}/${targetBranch}`;
-  const { behind, ahead } = await getAheadBehind(cwd, remoteRef, targetBranch);
+  const remoteRef = `${remote}/${branch}`;
+  const { behind, ahead } = await getAheadBehind(cwd, remoteRef, branch);
   if (behind > 0 && ahead > 0) {
     throw new Error(
-      t("remoteBranchDiverged", { branch: targetBranch, remote })
+      t("remoteBranchDiverged", { branch, remote })
     );
   }
   if (behind > 0) {

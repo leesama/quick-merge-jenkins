@@ -170,6 +170,11 @@ const MESSAGES = {
     en: "Merge completed with failures: {target}",
   },
   mergeFailed: { zh: "合并失败：{error}", en: "Merge failed: {error}" },
+  mergeToTestLabel: { zh: "合并到测试", en: "Merge to Test" },
+  mergeTestStarted: {
+    zh: "正在合并到测试分支...",
+    en: "Merging into test branch...",
+  },
   deployTestStarted: {
     zh: "正在发布到测试环境...",
     en: "Deploying to test...",
@@ -467,6 +472,8 @@ export interface WebviewStrings {
   mergeErrorLabel: string;
   conflictFilesLabel: string;
   stayOnTargetStatus: string;
+  mergeToTestLabel: string;
+  mergeTestInProgress: string;
   deployTestLabel: string;
   deployTestInProgress: string;
   deployTestMissingConfig: string;
@@ -518,6 +525,8 @@ export function getWebviewStrings(): WebviewStrings {
     mergeErrorLabel: t("mergeErrorLabel"),
     conflictFilesLabel: t("conflictFilesLabel"),
     stayOnTargetStatus: t("stayOnTargetStatus"),
+    mergeToTestLabel: t("mergeToTestLabel"),
+    mergeTestInProgress: t("mergeTestStarted"),
     deployTestInProgress: t("deployTestStarted"),
     deployTestMissingConfig: t("deployTestMissingConfig"),
     deployProdInProgress: t("deployProdStarted"),

@@ -5,6 +5,7 @@ import {
   confirmDeployTest,
   handleDeployProd,
   handleDeployTest,
+  handleMergeToTest,
   handleSquashDeployProd,
 } from "./actions/deploy-actions";
 import {
@@ -45,6 +46,7 @@ export class QuickMergeViewProvider implements vscode.WebviewViewProvider {
     this.messageDeps = {
       postState: this.deps.postState,
       handleDeployTest: (message) => handleDeployTest(this.deps, message),
+      handleMergeToTest: (message) => handleMergeToTest(this.deps, message),
       handleDeployProd: (repoRoot) => handleDeployProd(this.deps, repoRoot),
       handleSquashDeployProd: (repoRoot) =>
         handleSquashDeployProd(this.deps, repoRoot),

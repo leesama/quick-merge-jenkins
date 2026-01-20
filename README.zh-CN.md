@@ -32,6 +32,7 @@
 
 开发完成后，将代码部署到测试环境：
 
+- **合并到测试**：先拉取远端最新代码，再将当前分支合并到目标测试分支并推送（不触发 Jenkins）
 - **发布到测试环境**：自动合并当前分支到目标测试分支（可配置，默认 `pre-test`），并触发 Jenkins 构建
   - 展示合并结果（commit、变更文件、耗时）
   - 展示 Jenkins 触发结果
@@ -98,11 +99,11 @@
     // Push after commit (default: true)
     "pushAfterCommit": true
   },
-  // Deploy to test environment config
+  // Deploy to test environment config (targetBranch is also used by Merge to test)
   "deployToTest": {
     // Target branch for merge (default: pre-test)
     "targetBranch": "pre-test",
-    // Jenkins trigger config
+    // Jenkins trigger config (required for deploy to test)
     "jenkins": {
       // Jenkins base URL (without /job/...)
       "url": "https://jenkins.example.com",
@@ -141,9 +142,9 @@
   - `deepseekApiKey`：DeepSeek API Key（可放在配置文件中）
   - `deepseekBaseUrl`：DeepSeek API 地址（默认 `https://api.deepseek.com/v1`）
   - `deepseekModel`：DeepSeek 模型名（默认 `deepseek-chat`）
-- `deployToTest`：发布到测试环境配置（可选）
-  - `targetBranch`：合并目标分支（默认 `pre-test`）
-  - `jenkins`：Jenkins 触发配置
+- `deployToTest`：测试分支配置（可选）
+  - `targetBranch`：合并目标分支（默认 `pre-test`，合并到测试按钮同样使用）
+  - `jenkins`：Jenkins 触发配置（发布到测试环境时必需）
 - `commit`：提交设置（可选）
   - `pushAfterCommit`：提交后是否自动推送（默认 `true`）
 - `deployToProd`：发布到生产环境配置（可选）

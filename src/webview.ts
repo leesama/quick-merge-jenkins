@@ -442,6 +442,15 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       });
       actionsEl.appendChild(commitBtn);
 
+      // Merge to test 按钮
+      const mergeToTestBtn = document.createElement('button');
+      mergeToTestBtn.className = 'secondary';
+      mergeToTestBtn.textContent = i18n.mergeToTestLabel;
+      mergeToTestBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'mergeToTest', repoRoot });
+      });
+      actionsEl.appendChild(mergeToTestBtn);
+
       // Deploy to test 按钮
       const deployBtn = document.createElement('button');
       deployBtn.className = 'secondary';
@@ -711,6 +720,11 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       }
       if (message.type === 'deployTestStarted') {
         setStatus(message.message || i18n.deployTestInProgress, 'info');
+        setBusy(true);
+        return;
+      }
+      if (message.type === 'mergeTestStarted') {
+        setStatus(message.message || i18n.mergeTestInProgress, 'info');
         setBusy(true);
         return;
       }

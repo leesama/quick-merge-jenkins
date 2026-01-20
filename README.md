@@ -34,6 +34,7 @@ During development, use this button to commit code:
 
 After development, deploy to the test environment:
 
+- **Merge to test**: Fetch the latest remote updates, then merge current branch into the target test branch and push (no Jenkins)
 - **Deploy to test**: Auto-merge current branch to target test branch (configurable, default `pre-test`) and trigger Jenkins build
   - Shows merge result (commit, changed files, duration)
   - Shows Jenkins trigger result
@@ -100,11 +101,11 @@ Example:
     // Push after commit (default: true)
     "pushAfterCommit": true
   },
-  // Deploy to test environment config
+  // Deploy to test environment config (targetBranch is also used by Merge to test)
   "deployToTest": {
     // Target branch for merge (default: pre-test)
     "targetBranch": "pre-test",
-    // Jenkins trigger config
+    // Jenkins trigger config (required for deploy to test)
     "jenkins": {
       // Jenkins base URL (without /job/...)
       "url": "https://jenkins.example.com",
@@ -143,9 +144,9 @@ Example:
   - `deepseekApiKey`: DeepSeek API key (can be stored in config)
   - `deepseekBaseUrl`: DeepSeek API base URL (default `https://api.deepseek.com/v1`)
   - `deepseekModel`: DeepSeek model name (default `deepseek-chat`)
-- `deployToTest`: Deploy-to-test config (optional)
-  - `targetBranch`: Merge target branch (default `pre-test`)
-  - `jenkins`: Jenkins trigger config
+- `deployToTest`: Test branch config (optional)
+  - `targetBranch`: Merge target branch (default `pre-test`, used by Merge to test too)
+  - `jenkins`: Jenkins trigger config (required for Deploy to test)
 - `commit`: Commit config (optional)
   - `pushAfterCommit`: Push after commit (default `true`)
 - `deployToProd`: Deploy-to-prod config (optional)

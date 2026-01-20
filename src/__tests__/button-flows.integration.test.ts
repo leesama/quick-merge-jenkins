@@ -10,6 +10,7 @@ import {
   confirmDeployTest,
   handleDeployProd,
   handleDeployTest,
+  handleMergeToTest,
   handleSquashDeployProd,
 } from "../actions/deploy-actions";
 import {
@@ -97,6 +98,7 @@ function createMessageDeps(deps: ActionDeps): WebviewMessageHandlerDeps {
   return {
     postState: deps.postState,
     handleDeployTest: (message) => handleDeployTest(deps, message),
+    handleMergeToTest: (message) => handleMergeToTest(deps, message),
     handleDeployProd: (repoRoot) => handleDeployProd(deps, repoRoot),
     handleSquashDeployProd: (repoRoot) => handleSquashDeployProd(deps, repoRoot),
     confirmDeployTest: (message) => confirmDeployTest(deps, message),
@@ -306,6 +308,40 @@ test("button: deployTest merges and triggers jenkins", async (t) => {
   assert.equal(context.targetBranch, "pre-test");
   const message = await runGit(["log", "-1", "--pretty=%B", "pre-test"], cwd);
   assert.equal(message.stdout.trim(), "feat: update");
+});
+
+test("button: mergeToTest merges and pushes", async (t) => {
+  const cwd = await createTempRepo(t);
+  setupWorkspace(cwd);
+  const { deps } = createActionDeps();
+  const handlerDeps = createMessageDeps(deps);
+  await commitFile(cwd, "file.txt", "base\n", "chore: init");
+  const baseBranch = await getCurrentBranch(cwd);
+  await runGit(["checkout", "-b", "pre-test"], cwd);
+  await runGit(["checkout", baseBranch], cwd);
+  await commitFile(cwd, "file.txt", "base\nfeature\n", "feat: merge-to-test");
+
+  const remote = await createBareRemote(t);
+  await setRemoteAndPush(cwd, remote, baseBranch);
+
+  await writeConfig(cwd, {
+    deployToTest: {
+      targetBranch: "pre-test",
+    },
+  });
+
+  await handleWebviewMessage(
+    { type: "mergeToTest", repoRoot: cwd },
+    handlerDeps
+  );
+
+  const message = await runGit(["log", "-1", "--pretty=%B", "pre-test"], cwd);
+  assert.equal(message.stdout.trim(), "feat: merge-to-test");
+  const remoteHead = await runGit(
+    ["ls-remote", "--heads", "origin", "pre-test"],
+    cwd
+  );
+  assert.ok(remoteHead.stdout.includes("pre-test"));
 });
 
 test("button: confirmDeployTest confirms then deploys", async (t) => {

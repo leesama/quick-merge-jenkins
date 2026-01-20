@@ -1,6 +1,7 @@
 export interface WebviewMessageHandlerDeps {
   postState: (options?: { loadConfig?: boolean }) => Promise<void>;
   handleDeployTest: (message: any) => Promise<void>;
+  handleMergeToTest: (message: any) => Promise<void>;
   handleDeployProd: (repoRoot?: string) => Promise<void>;
   handleSquashDeployProd: (repoRoot?: string) => Promise<void>;
   confirmDeployTest: (message: any) => Promise<void>;
@@ -29,6 +30,10 @@ export async function handleWebviewMessage(
   }
   if (type === "deployTest") {
     await deps.handleDeployTest(message);
+    return;
+  }
+  if (type === "mergeToTest") {
+    await deps.handleMergeToTest(message);
     return;
   }
   if (type === "deployProd") {
