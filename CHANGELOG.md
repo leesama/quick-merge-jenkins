@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.7
+
+- Support auto-push to remote after commit. Set `pushAfterCommit` to `false` to disable this feature.
+
 ## 2.0.3
 
 - Update commit flow to select files before entering the commit message.
