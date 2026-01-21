@@ -158,6 +158,7 @@
 - `crumb`：Jenkins 开启 CSRF 时设为 `true`
 - `parameters`：触发参数，支持变量：
   - `${currentBranch}` `${sourceBranch}` `${targetBranch}` `${mergeCommit}` `${headCommit}` `${deployEnv}`
+- `url`、`user`、`apiToken` 可通过 VS Code 设置提供兜底值
 
 ## 故障排查
 
@@ -168,6 +169,14 @@
 
 优先使用配置文件中的 `demandBranch`，也支持在设置中配置以下参数作为兜底：
 
-- `quick-merge.deepseekApiKey`：DeepSeek API Key
-- `quick-merge.deepseekBaseUrl`：接口地址，默认 `https://api.deepseek.com/v1`
-- `quick-merge.deepseekModel`：模型名，默认 `deepseek-chat`
+- `quick-merge-jenkins.deepseekApiKey`：DeepSeek API Key
+- `quick-merge-jenkins.deepseekBaseUrl`：接口地址，默认 `https://api.deepseek.com/v1`
+- `quick-merge-jenkins.deepseekModel`：模型名，默认 `deepseek-chat`
+
+## Jenkins 全局设置
+
+可在 VS Code 设置中提供 Jenkins 的全局兜底配置：
+
+- `quick-merge-jenkins.jenkinsUrl`：Jenkins 基地址
+- `quick-merge-jenkins.jenkinsUser`：Jenkins 用户名
+- `quick-merge-jenkins.jenkinsApiToken`：Jenkins API Token

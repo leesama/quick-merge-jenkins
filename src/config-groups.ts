@@ -1,5 +1,6 @@
 import { getConfigPathInfo, readMergeConfig } from "./config";
 import { t } from "./i18n";
+import { applyJenkinsSettings, getJenkinsSettings } from "./jenkins-settings";
 import { formatRepoLabel } from "./repo";
 import { getErrorMessage } from "./utils";
 import { ConfigGroup, DeployButtonInfo, MergeConfigFile } from "./types";
@@ -64,8 +65,13 @@ function getDeployToTestInfo(
     return undefined;
   }
   const label = t("deployTestLabel");
+  const jenkinsSettings = getJenkinsSettings();
+  const resolvedJenkins = applyJenkinsSettings(
+    deployConfig.jenkins,
+    jenkinsSettings
+  );
   const hasJenkins =
-    Boolean(deployConfig.jenkins?.url) && Boolean(deployConfig.jenkins?.job);
+    Boolean(resolvedJenkins?.url) && Boolean(resolvedJenkins?.job);
   const isEnabled = hasJenkins;
   return {
     label,

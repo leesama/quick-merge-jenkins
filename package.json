@@ -69,6 +69,24 @@
           "default": "deepseek-chat",
           "markdownDescription": "%config.deepseekModel%",
           "scope": "machine"
+        },
+        "quick-merge-jenkins.jenkinsUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.jenkinsUrl%",
+          "scope": "machine"
+        },
+        "quick-merge-jenkins.jenkinsUser": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.jenkinsUser%",
+          "scope": "machine"
+        },
+        "quick-merge-jenkins.jenkinsApiToken": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "%config.jenkinsApiToken%",
+          "scope": "machine"
         }
       }
     }

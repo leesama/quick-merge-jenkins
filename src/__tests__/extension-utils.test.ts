@@ -92,7 +92,7 @@ test("commit message helpers normalize prefixes and defaults", () => {
   );
   assert.equal(
     pickBaseCommitMessage("chore: update", "feat: add"),
-    "feat: add"
+    "chore: update"
   );
   assert.equal(
     pickBaseCommitMessage("feat: add", "feat: add"),

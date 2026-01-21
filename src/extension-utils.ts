@@ -127,14 +127,10 @@ export function pickBaseCommitMessage(
   storedDemandMessage: string
 ): string {
   const trimmedLast = (lastCommitMessage ?? "").trim();
-  const trimmedStored = (storedDemandMessage ?? "").trim();
-  if (trimmedStored) {
-    const prefix = extractCommitPrefix(trimmedStored);
-    if (prefix && !hasCommitPrefix(trimmedLast, prefix)) {
-      return trimmedStored;
-    }
+  if (trimmedLast) {
+    return trimmedLast;
   }
-  return trimmedLast || trimmedStored;
+  return (storedDemandMessage ?? "").trim();
 }
 
 export function formatDemandMessage(message: string, prefix: string): string {

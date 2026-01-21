@@ -9,5 +9,8 @@
   "configuration.title": "Quick Merge Jenkins",
   "config.deepseekApiKey": "DeepSeek API Key used to translate demand descriptions.",
   "config.deepseekBaseUrl": "DeepSeek API base URL, default includes /v1.",
-  "config.deepseekModel": "DeepSeek model name."
+  "config.deepseekModel": "DeepSeek model name.",
+  "config.jenkinsUrl": "Jenkins base URL used as a fallback for deploy-to-test.",
+  "config.jenkinsUser": "Jenkins user used as a fallback for deploy-to-test.",
+  "config.jenkinsApiToken": "Jenkins API token used as a fallback for deploy-to-test."
 }

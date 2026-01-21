@@ -160,6 +160,7 @@ Example:
 - `crumb`: Set `true` when CSRF is enabled
 - `parameters`: Supports variables:
   - `${currentBranch}` `${sourceBranch}` `${targetBranch}` `${mergeCommit}` `${headCommit}` `${deployEnv}`
+- `url`, `user`, `apiToken` can be omitted if set in VS Code settings
 
 ## Troubleshooting
 
@@ -170,6 +171,14 @@ Example:
 
 Config file `demandBranch` takes precedence; you can also set fallback values in VS Code settings:
 
-- `quick-merge.deepseekApiKey`: DeepSeek API key
-- `quick-merge.deepseekBaseUrl`: API base URL (default `https://api.deepseek.com/v1`)
-- `quick-merge.deepseekModel`: Model name (default `deepseek-chat`)
+- `quick-merge-jenkins.deepseekApiKey`: DeepSeek API key
+- `quick-merge-jenkins.deepseekBaseUrl`: API base URL (default `https://api.deepseek.com/v1`)
+- `quick-merge-jenkins.deepseekModel`: Model name (default `deepseek-chat`)
+
+## Jenkins Settings
+
+You can set global Jenkins defaults in VS Code settings:
+
+- `quick-merge-jenkins.jenkinsUrl`: Jenkins base URL
+- `quick-merge-jenkins.jenkinsUser`: Jenkins username
+- `quick-merge-jenkins.jenkinsApiToken`: Jenkins API token

@@ -9,5 +9,8 @@
   "configuration.title": "Quick Merge Jenkins",
   "config.deepseekApiKey": "DeepSeek API Key，用于创建需求分支时翻译需求描述。",
   "config.deepseekBaseUrl": "DeepSeek API 基地址，默认包含 /v1。",
-  "config.deepseekModel": "DeepSeek 模型名称。"
+  "config.deepseekModel": "DeepSeek 模型名称。",
+  "config.jenkinsUrl": "Jenkins 基地址，作为部署到测试环境的兜底配置。",
+  "config.jenkinsUser": "Jenkins 用户名，作为部署到测试环境的兜底配置。",
+  "config.jenkinsApiToken": "Jenkins API Token，作为部署到测试环境的兜底配置。"
 }

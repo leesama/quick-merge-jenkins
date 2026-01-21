@@ -10,6 +10,10 @@ import {
 } from "../git";
 import { t } from "../i18n";
 import { triggerJenkinsBuild } from "../jenkins";
+import {
+  applyJenkinsSettingsToConfig,
+  getJenkinsSettings,
+} from "../jenkins-settings";
 import { performMerge, syncRemoteBranch } from "../merge";
 import { getWorkspaceRoot, resolveRepoRoot, resolveRepoRoots } from "../repo";
 import { state } from "../state";
@@ -62,12 +66,17 @@ export async function handleDeployTest(
   });
   try {
     const configFile = await readMergeConfig(cwd);
+    const jenkinsSettings = getJenkinsSettings();
+    const resolvedConfigFile = applyJenkinsSettingsToConfig(
+      configFile,
+      jenkinsSettings
+    );
     const [currentBranch, remotes] = await Promise.all([
       getCurrentBranch(cwd),
       listRemotes(cwd),
     ]);
     const planResult = buildDeployTestPlan({
-      configFile,
+      configFile: resolvedConfigFile,
       currentBranch,
       remotes,
     });
