@@ -165,18 +165,30 @@
 - Jenkins Crumb 403：请确认 `user` + `apiToken` 正确，或将 `crumb` 设为 `false`
 - 推送失败：检查仓库权限与远端设置
 
-## 需求分支创建设置
+## 全局配置 (VS Code Settings)
 
-优先使用配置文件中的 `demandBranch`，也支持在设置中配置以下参数作为兜底：
+除了项目配置文件（`.quick-merge.jsonc`）外，还可以在 VS Code 设置中配置全局参数作为兜底值。全局配置适合在多个项目间共享通用凭据，项目配置文件中的同名字段会**覆盖**全局配置。
 
-- `quick-merge-jenkins.deepseekApiKey`：DeepSeek API Key
-- `quick-merge-jenkins.deepseekBaseUrl`：接口地址，默认 `https://api.deepseek.com/v1`
-- `quick-merge-jenkins.deepseekModel`：模型名，默认 `deepseek-chat`
+在 VS Code 设置 (`Preferences: Open Settings`) 中搜索 `quick-merge-jenkins` 可找到以下配置项：
 
-## Jenkins 全局设置
+### DeepSeek API 配置
 
-可在 VS Code 设置中提供 Jenkins 的全局兜底配置：
+用于需求分支创建时的中英文自动翻译：
 
-- `quick-merge-jenkins.jenkinsUrl`：Jenkins 基地址
-- `quick-merge-jenkins.jenkinsUser`：Jenkins 用户名
-- `quick-merge-jenkins.jenkinsApiToken`：Jenkins API Token
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `quick-merge-jenkins.deepseekApiKey` | DeepSeek API Key | - |
+| `quick-merge-jenkins.deepseekBaseUrl` | API 接口地址 | `https://api.deepseek.com/v1` |
+| `quick-merge-jenkins.deepseekModel` | 模型名称 | `deepseek-chat` |
+
+### Jenkins 配置
+
+用于触发 Jenkins 构建时的认证信息：
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `quick-merge-jenkins.jenkinsUrl` | Jenkins 基地址 | - |
+| `quick-merge-jenkins.jenkinsUser` | Jenkins 用户名 | - |
+| `quick-merge-jenkins.jenkinsApiToken` | Jenkins API Token | - |
+
+> 💡 **提示**：API Key、Token 等敏感信息建议配置在 VS Code 全局设置中，避免提交到版本库。

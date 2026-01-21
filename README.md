@@ -167,18 +167,30 @@ Example:
 - Jenkins Crumb 403: Verify `user` + `apiToken` are correct, or set `crumb` to `false`
 - Push failed: Check repo permissions and remote settings
 
-## Demand Branch Settings
+## Global Configuration (VS Code Settings)
 
-Config file `demandBranch` takes precedence; you can also set fallback values in VS Code settings:
+In addition to the project config file (`.quick-merge.jsonc`), you can set global parameters in VS Code settings as fallback values. Global settings are ideal for sharing common credentials across multiple projects. Settings in the project config file will **override** global settings.
 
-- `quick-merge-jenkins.deepseekApiKey`: DeepSeek API key
-- `quick-merge-jenkins.deepseekBaseUrl`: API base URL (default `https://api.deepseek.com/v1`)
-- `quick-merge-jenkins.deepseekModel`: Model name (default `deepseek-chat`)
+Search for `quick-merge-jenkins` in VS Code settings (`Preferences: Open Settings`) to find these options:
 
-## Jenkins Settings
+### DeepSeek API Configuration
 
-You can set global Jenkins defaults in VS Code settings:
+Used for auto-translation when creating demand branches:
 
-- `quick-merge-jenkins.jenkinsUrl`: Jenkins base URL
-- `quick-merge-jenkins.jenkinsUser`: Jenkins username
-- `quick-merge-jenkins.jenkinsApiToken`: Jenkins API token
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `quick-merge-jenkins.deepseekApiKey` | DeepSeek API Key | - |
+| `quick-merge-jenkins.deepseekBaseUrl` | API base URL | `https://api.deepseek.com/v1` |
+| `quick-merge-jenkins.deepseekModel` | Model name | `deepseek-chat` |
+
+### Jenkins Configuration
+
+Used for authentication when triggering Jenkins builds:
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `quick-merge-jenkins.jenkinsUrl` | Jenkins base URL | - |
+| `quick-merge-jenkins.jenkinsUser` | Jenkins username | - |
+| `quick-merge-jenkins.jenkinsApiToken` | Jenkins API token | - |
+
+> 💡 **Tip**: Sensitive information like API Keys and Tokens should be configured in VS Code global settings to avoid committing them to version control.

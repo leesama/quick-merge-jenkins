@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.10
+
+- Improve documentation for global configuration (VS Code Settings) in README.
+
 ## 2.0.9
 
 - Add "Merge to test" action to sync remote, merge into test branch, and push without Jenkins.
