@@ -44,6 +44,18 @@ export async function triggerJenkinsBuild(
   }
 }
 
+export function buildJenkinsJobUrl(baseUrl: string, job?: string): string {
+  const normalizedBase = baseUrl.replace(/\/+$/, "");
+  if (!normalizedBase) {
+    return "";
+  }
+  const trimmedJob = (job ?? "").trim();
+  if (!trimmedJob) {
+    return normalizedBase;
+  }
+  return `${normalizedBase}${getJenkinsJobPath(trimmedJob)}`;
+}
+
 async function getJenkinsCrumb(
   baseUrl: string,
   headers: Record<string, string>

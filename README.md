@@ -53,15 +53,17 @@ After testing passes, optionally clean up commit history before release:
 
 - **Squash commits**: Defaults to selecting recent commits with the same prefix on current branch. Manually adjust selection range, then confirm to squash into one commit for a clean history.
 
-### Step 6: Deploy to Production
+### Step 6: Create Production Branch
 
 When ready to release:
 
-- **Deploy to prod**: Create today's release branch from the latest release branch (prefix configurable, e.g., `release`, `hotfix`). Supports multi-select for both release branches and demand branches to merge.
+- **Merge into Prod**: Create today's release branch from the latest release branch (prefix configurable, e.g., `release`, `hotfix`), then merge selected feature branches. This does not trigger an actual production deploy.
 
-Or complete squash and deploy in one step:
+Or complete squash and merge in one step:
 
-- **Squash & deploy to prod**: First squash commits, then create release branch and merge current branch
+- **Squash & Merge into Prod**: First squash commits, then create release branch and merge current branch
+
+After either action completes, the extension opens the Jenkins page (from `deployToProd.jenkins` or VS Code settings `quick-merge-jenkins.jenkinsProdUrl`/`jenkinsProdJob`) so you can trigger manually.
 
 ---
 
@@ -125,10 +127,15 @@ Example:
       }
     }
   },
-  // Deploy to production config (create today's branch from latest prefix branch)
+  // Create production branch config (create today's branch from latest prefix branch)
   "deployToProd": {
     // Branch prefix list for production releases
-    "prodPrefix": ["release", "hotfix"]
+    "prodPrefix": ["release", "hotfix"],
+    // Jenkins page for production manual trigger
+    "jenkins": {
+      "url": "https://jenkins-prod.example.com",
+      "job": "team/release/deploy-prod"
+    }
   }
 }
 ```
@@ -149,8 +156,11 @@ Example:
   - `jenkins`: Jenkins trigger config (required for Deploy to test)
 - `commit`: Commit config (optional)
   - `pushAfterCommit`: Push after commit (default `true`)
-- `deployToProd`: Deploy-to-prod config (optional)
-  - `prodPrefix`: Branch prefix list (e.g., `release`, `hotfix`); clicking deploy shows the latest branch per prefix for multi-select
+- `deployToProd`: Create production branch config (optional)
+  - `prodPrefix`: Branch prefix list (e.g., `release`, `hotfix`); clicking create shows the latest branch per prefix for multi-select
+  - `jenkins`: Jenkins page config for prod (optional)
+    - `url`: Jenkins base URL
+    - `job`: Jenkins job path to open (optional)
 
 ### Jenkins Config
 
@@ -161,6 +171,7 @@ Example:
 - `parameters`: Supports variables:
   - `${currentBranch}` `${sourceBranch}` `${targetBranch}` `${mergeCommit}` `${headCommit}` `${deployEnv}`
 - `url`, `user`, `apiToken` can be omitted if set in VS Code settings
+- `deployToProd.jenkins` is only used to open the Jenkins page after prod merge
 
 ## Troubleshooting
 
@@ -192,5 +203,14 @@ Used for authentication when triggering Jenkins builds:
 | `quick-merge-jenkins.jenkinsUrl` | Jenkins base URL | - |
 | `quick-merge-jenkins.jenkinsUser` | Jenkins username | - |
 | `quick-merge-jenkins.jenkinsApiToken` | Jenkins API token | - |
+
+### Jenkins (Prod Page) Configuration
+
+Used to open the production Jenkins page after prod merge:
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `quick-merge-jenkins.jenkinsProdUrl` | Jenkins base URL for prod page | - |
+| `quick-merge-jenkins.jenkinsProdJob` | Jenkins job path for prod page | - |
 
 > 💡 **Tip**: Sensitive information like API Keys and Tokens should be configured in VS Code global settings to avoid committing them to version control.

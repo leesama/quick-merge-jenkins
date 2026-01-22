@@ -8,12 +8,24 @@ export interface JenkinsSettings {
   apiToken: string;
 }
 
+export interface JenkinsBrowseSettings {
+  url: string;
+  job: string;
+}
+
 export function getJenkinsSettings(): JenkinsSettings {
   const config = vscode.workspace.getConfiguration("quick-merge-jenkins");
   const url = (config.get<string>("jenkinsUrl") ?? "").trim();
   const user = (config.get<string>("jenkinsUser") ?? "").trim();
   const apiToken = (config.get<string>("jenkinsApiToken") ?? "").trim();
   return { url, user, apiToken };
+}
+
+export function getJenkinsProdSettings(): JenkinsBrowseSettings {
+  const config = vscode.workspace.getConfiguration("quick-merge-jenkins");
+  const url = (config.get<string>("jenkinsProdUrl") ?? "").trim();
+  const job = (config.get<string>("jenkinsProdJob") ?? "").trim();
+  return { url, job };
 }
 
 export function applyJenkinsSettings(

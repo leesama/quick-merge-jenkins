@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.0
+
+- Open production Jenkins page after prod merge actions using new prod Jenkins config.
+- Add production Jenkins page settings: `deployToProd.jenkins` and VS Code settings `jenkinsProdUrl`/`jenkinsProdJob`.
+- Refresh production merge button labels and related copy to clarify behavior.
+
 ## 2.0.10
 
 - Improve documentation for global configuration (VS Code Settings) in README.

@@ -77,6 +77,14 @@ const MESSAGES = {
     zh: "Jenkins 配置缺少 url 或 job。",
     en: "Jenkins config missing url or job.",
   },
+  jenkinsUrlMissing: {
+    zh: "未配置生产 Jenkins 地址，已跳过打开页面。",
+    en: "Production Jenkins URL is not configured; skipped opening page.",
+  },
+  jenkinsOpenFailed: {
+    zh: "打开 Jenkins 页面失败：{error}",
+    en: "Failed to open Jenkins page: {error}",
+  },
   gitRepoNotFound: {
     zh: "未找到 Git 仓库。",
     en: "No Git repository found.",
@@ -180,8 +188,8 @@ const MESSAGES = {
     en: "Deploying to test...",
   },
   deployProdStarted: {
-    zh: "正在部署到生产环境...",
-    en: "Deploying to prod...",
+    zh: "正在创建生产分支并合并...",
+    en: "Creating production branch and merging...",
   },
   deployTestSuccess: {
     zh: "已触发测试环境发布：{job}",
@@ -196,24 +204,24 @@ const MESSAGES = {
     en: "Test deploy failed: {error}",
   },
   deployProdFailed: {
-    zh: "部署到生产环境失败：{error}",
-    en: "Deploy to prod failed: {error}",
+    zh: "创建生产分支并合并失败：{error}",
+    en: "Create production branch and merge failed: {error}",
   },
   deployProdPrefixEmpty: {
-    zh: "生产发布分支前缀为空，请在配置文件 deployToProd.prodPrefix 中设置。",
-    en: "Prod prefixes are empty; set deployToProd.prodPrefix in config.",
+    zh: "生产分支前缀为空，请在配置文件 deployToProd.prodPrefix 中设置。",
+    en: "Production branch prefixes are empty; set deployToProd.prodPrefix in config.",
   },
   deployProdBaseBranchMissing: {
     zh: "未找到 {prefix}_YYYYMMDD 分支。",
     en: "No {prefix}_YYYYMMDD branch found.",
   },
   deployProdPickBranchesPlaceholder: {
-    zh: "选择要发布合并的分支",
-    en: "Select branches to deploy",
+    zh: "选择作为生产基准的发布分支",
+    en: "Select base release branches for production",
   },
   deployProdPickFeatBranchesPlaceholder: {
-    zh: "选择需要合并的 feat 分支（默认当前分支）",
-    en: "Select feat branches to merge (current branch selected)",
+    zh: "选择需要合并到生产分支的 feat 分支（默认当前分支）",
+    en: "Select feat branches to merge into production (current branch selected)",
   },
   deployProdFeatBranchEmpty: {
     zh: "未找到可合并的 feat 分支。",
@@ -313,28 +321,28 @@ const MESSAGES = {
     en: "Empty commit created: {message}",
   },
   commitSuccess: { zh: "已提交：{message}", en: "Committed: {message}" },
-  createConfigLabel: { zh: "创建基础配置", en: "Create base config" },
+  createConfigLabel: { zh: "创建基础配置", en: "Create Base Config" },
   mergeResultTitle: { zh: "合并结果", en: "Merge Result" },
   conflictTitle: { zh: "⚠️ 发现冲突", en: "⚠️ Conflicts detected" },
-  openConflictFiles: { zh: "查看冲突文件", en: "Open conflict files" },
-  openMergeEditor: { zh: "打开合并编辑器", en: "Open merge editor" },
+  openConflictFiles: { zh: "查看冲突文件", en: "Open Conflict Files" },
+  openMergeEditor: { zh: "打开合并编辑器", en: "Open Merge Editor" },
   checkoutOriginal: {
     zh: "放弃合并 (回到原分支)",
-    en: "Abort merge (back to original branch)",
+    en: "Abort Merge (Back to Original Branch)",
   },
   stayOnTarget: {
     zh: "保留当前状态 (解决冲突)",
-    en: "Stay on target (resolve conflicts)",
+    en: "Stay on Target (Resolve Conflicts)",
   },
-  deployTestLabel: { zh: "发布到测试环境", en: "Deploy to test" },
-  deployProdLabel: { zh: "部署到生产环境", en: "Deploy to prod" },
+  deployTestLabel: { zh: "发布到测试环境", en: "Deploy to Test" },
+  deployProdLabel: { zh: "合并到生产", en: "Merge into Prod" },
   squashDeployProdLabel: {
-    zh: "合并提交并部署到生产环境",
-    en: "Squash & Deploy to prod",
+    zh: "合并提交并合并到生产",
+    en: "Squash & Merge into Prod",
   },
-  demandCreate: { zh: "创建需求分支", en: "Create demand branch" },
-  demandCommit: { zh: "提交代码", en: "Commit changes" },
-  rebaseSquash: { zh: "合并提交", en: "Squash commits" },
+  demandCreate: { zh: "创建需求分支", en: "Create Demand Branch" },
+  demandCommit: { zh: "提交代码", en: "Commit Changes" },
+  rebaseSquash: { zh: "合并提交", en: "Squash Commits" },
   squashMorePrompt: {
     zh: "是否继续合并其他分支的提交？",
     en: "Squash commits on another branch?",
@@ -345,7 +353,7 @@ const MESSAGES = {
     zh: "选择要合并提交的分支",
     en: "Select a branch to squash",
   },
-  commitAndDeploy: { zh: "提交并发布到测试", en: "Commit & Deploy to test" },
+  commitAndDeploy: { zh: "提交并发布到测试", en: "Commit & Deploy to Test" },
   refreshHint: {
     zh: "正在读取配置...",
     en: "Loading config...",
@@ -353,7 +361,7 @@ const MESSAGES = {
   gitProjectLabel: { zh: "Git 项目", en: "Git project" },
   missingConfigHint: {
     zh: "缺少配置文件的仓库: {labels}（可点击“创建基础配置”）",
-    en: "Missing config in: {labels} (use Create base config)",
+    en: "Missing config in: {labels} (use Create Base Config)",
   },
   openConfigHint: {
     zh: "双击打开配置",

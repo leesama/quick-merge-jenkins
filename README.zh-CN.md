@@ -51,15 +51,17 @@
 
 - **合并提交**：默认选中当前分支上最近一组相同前缀的 commit，可手动调整选择范围，确认后合并为一条，保持提交历史整洁
 
-### Step 6: 发布到生产
+### Step 6: 创建生产分支
 
 准备上线时，使用以下按钮：
 
-- **发布到生产环境**：基于最新的发布分支（前缀可配置，如 `release`、`hotfix`）创建当天发布分支，支持多选发布分支和需求分支进行合并
+- **合并到生产**：基于最新的发布分支（前缀可配置，如 `release`、`hotfix`）创建当天发布分支，并合并选择的 feat 分支（不包含实际发布能力）
 
-或者一步完成整理和发布：
+或者一步完成整理和合并：
 
-- **合并提交并发布到生产环境**：先执行合并提交，再创建发布分支并合并当前分支
+- **合并提交并合并到生产**：先执行合并提交，再创建发布分支并合并当前分支
+
+上述两个按钮完成后，会自动打开 Jenkins 页面（优先使用 `deployToProd.jenkins`，其次使用 `quick-merge-jenkins.jenkinsProdUrl`/`jenkinsProdJob`），方便手动触发。
 
 ---
 
@@ -123,10 +125,15 @@
       }
     }
   },
-  // Deploy to production config (create today's branch from latest prefix branch)
+  // Create production branch config (create today's branch from latest prefix branch)
   "deployToProd": {
     // Branch prefix list for production releases
-    "prodPrefix": ["release", "hotfix"]
+    "prodPrefix": ["release", "hotfix"],
+    // Jenkins page for production manual trigger
+    "jenkins": {
+      "url": "https://jenkins-prod.example.com",
+      "job": "team/release/deploy-prod"
+    }
   }
 }
 ```
@@ -147,8 +154,11 @@
   - `jenkins`：Jenkins 触发配置（发布到测试环境时必需）
 - `commit`：提交设置（可选）
   - `pushAfterCommit`：提交后是否自动推送（默认 `true`）
-- `deployToProd`：发布到生产环境配置（可选）
-  - `prodPrefix`：发布分支前缀数组（例如 `release`、`hotfix`），点击发布时会列出各前缀最新分支供多选
+- `deployToProd`：创建生产分支配置（可选）
+  - `prodPrefix`：发布分支前缀数组（例如 `release`、`hotfix`），点击创建时会列出各前缀最新分支供多选
+  - `jenkins`：生产 Jenkins 页面配置（可选）
+    - `url`：Jenkins 基地址
+    - `job`：Jenkins Job 路径（可选）
 
 ### Jenkins 配置
 
@@ -159,6 +169,7 @@
 - `parameters`：触发参数，支持变量：
   - `${currentBranch}` `${sourceBranch}` `${targetBranch}` `${mergeCommit}` `${headCommit}` `${deployEnv}`
 - `url`、`user`、`apiToken` 可通过 VS Code 设置提供兜底值
+- `deployToProd.jenkins` 仅用于生产合并后打开 Jenkins 页面
 
 ## 故障排查
 
@@ -190,5 +201,14 @@
 | `quick-merge-jenkins.jenkinsUrl` | Jenkins 基地址 | - |
 | `quick-merge-jenkins.jenkinsUser` | Jenkins 用户名 | - |
 | `quick-merge-jenkins.jenkinsApiToken` | Jenkins API Token | - |
+
+### Jenkins（生产页面）配置
+
+用于生产合并后打开 Jenkins 页面：
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `quick-merge-jenkins.jenkinsProdUrl` | 生产 Jenkins 基地址 | - |
+| `quick-merge-jenkins.jenkinsProdJob` | 生产 Jenkins Job 路径 | - |
 
 > 💡 **提示**：API Key、Token 等敏感信息建议配置在 VS Code 全局设置中，避免提交到版本库。

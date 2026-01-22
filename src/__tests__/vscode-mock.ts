@@ -23,6 +23,8 @@ interface MockState {
   writeFileCalls: any[];
   readFileCalls: any[];
   statCalls: any[];
+  openExternalCalls: any[];
+  openExternalQueue: Array<any>;
 }
 
 const mockState: MockState = {
@@ -44,6 +46,8 @@ const mockState: MockState = {
   writeFileCalls: [],
   readFileCalls: [],
   statCalls: [],
+  openExternalCalls: [],
+  openExternalQueue: [],
 };
 
 export const __mock = {
@@ -67,6 +71,8 @@ export const __mock = {
     mockState.writeFileCalls = [];
     mockState.readFileCalls = [];
     mockState.statCalls = [];
+    mockState.openExternalCalls = [];
+    mockState.openExternalQueue = [];
   },
   setLanguage(language: string) {
     mockState.language = language;
@@ -98,6 +104,9 @@ export const __mock = {
   queueErrorMessage(result: any) {
     mockState.errorMessageQueue.push(result);
   },
+  queueOpenExternal(result: any) {
+    mockState.openExternalQueue.push(result);
+  },
 };
 
 export const env = {
@@ -106,6 +115,14 @@ export const env = {
   },
   set language(value: string) {
     mockState.language = value;
+  },
+  async openExternal(uri: MockUri) {
+    mockState.openExternalCalls.push([uri]);
+    const next = mockState.openExternalQueue.shift();
+    if (next !== undefined) {
+      return next;
+    }
+    return true;
   },
 };
 
@@ -298,6 +315,14 @@ export const Uri = {
       fsPath: filePath,
       path: filePath,
       scheme: "file",
+    };
+  },
+  parse(value: string): MockUri {
+    const match = value.match(/^([a-zA-Z][\w+.-]*):/);
+    return {
+      fsPath: value,
+      path: value,
+      scheme: match ? match[1] : "",
     };
   },
 };

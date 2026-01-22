@@ -9,10 +9,11 @@ import {
   runGit,
 } from "../git";
 import { t } from "../i18n";
-import { triggerJenkinsBuild } from "../jenkins";
+import { buildJenkinsJobUrl, triggerJenkinsBuild } from "../jenkins";
 import {
   applyJenkinsSettingsToConfig,
   getJenkinsSettings,
+  getJenkinsProdSettings,
 } from "../jenkins-settings";
 import { performMerge, syncRemoteBranch } from "../merge";
 import { getWorkspaceRoot, resolveRepoRoot, resolveRepoRoots } from "../repo";
@@ -25,6 +26,36 @@ import { formatDateStamp, normalizePrefixes } from "../extension-utils";
 import { getConfigPathInfo, readMergeConfig } from "../config";
 import { handleRebaseSquash } from "./rebase-actions";
 import type { ActionDeps } from "./action-types";
+
+function resolveProdJenkinsUrl(configFile: MergeConfigFile | null): string {
+  const settings = getJenkinsProdSettings();
+  const prodJenkins = configFile?.deployToProd?.jenkins;
+  const url = (prodJenkins?.url ?? "").trim() || settings.url;
+  const job = (prodJenkins?.job ?? "").trim() || settings.job;
+  return buildJenkinsJobUrl(url, job);
+}
+
+async function openJenkinsPage(
+  configFile: MergeConfigFile | null,
+  notifyInfo: (message: string) => void,
+  notifyError: (message: string) => void
+): Promise<void> {
+  const url = resolveProdJenkinsUrl(configFile);
+  if (!url) {
+    notifyInfo(t("jenkinsUrlMissing"));
+    return;
+  }
+  try {
+    const didOpen = await vscode.env.openExternal(vscode.Uri.parse(url));
+    if (!didOpen) {
+      notifyError(t("jenkinsOpenFailed", { error: t("genericError") }));
+    }
+  } catch (error) {
+    notifyError(
+      t("jenkinsOpenFailed", { error: getErrorMessage(error) })
+    );
+  }
+}
 
 export async function confirmDeployTest(
   deps: ActionDeps,
@@ -432,6 +463,8 @@ export async function handleDeployProd(
 
       notifyInfo(t("deployProdSuccess", { branch: targetBranch }));
     }
+
+    await openJenkinsPage(configFile, notifyInfo, notifyError);
   } catch (error) {
     notifyError(
       t("deployProdFailed", {

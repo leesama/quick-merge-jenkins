@@ -46,6 +46,11 @@ export interface JenkinsConfig {
   parameters?: Record<string, string>;
 }
 
+export interface JenkinsBrowseConfig {
+  url?: string;
+  job?: string;
+}
+
 export interface DeployConfig {
   targetBranch?: string;
   jenkins?: JenkinsConfig;
@@ -53,6 +58,7 @@ export interface DeployConfig {
 
 export interface DeployProdConfig {
   prodPrefix?: string[];
+  jenkins?: JenkinsBrowseConfig;
 }
 
 export interface ResolvedMergePlan {
