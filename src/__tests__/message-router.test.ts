@@ -25,6 +25,7 @@ function createDeps(): {
     handleDeployProd: createAsyncSpy(),
     handleSquashDeployProd: createAsyncSpy(),
     confirmDeployTest: createAsyncSpy(),
+    confirmDeployProdEnv: createAsyncSpy(),
     commitDemandCode: createAsyncSpy(),
     checkoutOriginal: createAsyncSpy(),
     openConflictFiles: createAsyncSpy(),
@@ -41,6 +42,7 @@ function createDeps(): {
     handleDeployProd: spies.handleDeployProd.fn,
     handleSquashDeployProd: spies.handleSquashDeployProd.fn,
     confirmDeployTest: spies.confirmDeployTest.fn,
+    confirmDeployProdEnv: spies.confirmDeployProdEnv.fn,
     commitDemandCode: spies.commitDemandCode.fn,
     checkoutOriginal: spies.checkoutOriginal.fn,
     openConflictFiles: spies.openConflictFiles.fn,
@@ -69,6 +71,16 @@ test("handleWebviewMessage routes deployProd with repoRoot", async () => {
   );
   assert.equal(spies.handleDeployProd.calls.length, 1);
   assert.deepEqual(spies.handleDeployProd.calls[0], ["/tmp/repo"]);
+});
+
+test("handleWebviewMessage routes confirmDeployProdEnv with repoRoot", async () => {
+  const { deps, spies } = createDeps();
+  await handleWebviewMessage(
+    { type: "confirmDeployProdEnv", repoRoot: "/tmp/repo" },
+    deps
+  );
+  assert.equal(spies.confirmDeployProdEnv.calls.length, 1);
+  assert.deepEqual(spies.confirmDeployProdEnv.calls[0], ["/tmp/repo"]);
 });
 
 test("handleWebviewMessage routes mergeToTest", async () => {

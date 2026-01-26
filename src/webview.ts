@@ -96,6 +96,15 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       background-color: var(--vscode-button-secondaryHoverBackground);
     }
 
+    button.danger {
+      background-color: #c62828;
+      color: #ffffff;
+    }
+
+    button.danger:hover {
+      background-color: #b71c1c;
+    }
+
     .row {
       display: flex;
       gap: 10px;
@@ -417,6 +426,14 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       });
       actionsEl.appendChild(squashDeployProdBtn);
 
+      const deployProdEnvBtn = document.createElement('button');
+      deployProdEnvBtn.className = 'danger';
+      deployProdEnvBtn.textContent = i18n.deployProdEnvLabel;
+      deployProdEnvBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'confirmDeployProdEnv', repoRoot });
+      });
+      actionsEl.appendChild(deployProdEnvBtn);
+
       container.appendChild(actionsEl);
     }
 
@@ -730,6 +747,11 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       }
       if (message.type === 'deployProdStarted') {
         setStatus(message.message || i18n.deployProdInProgress, 'info');
+        setBusy(true);
+        return;
+      }
+      if (message.type === 'deployProdEnvStarted') {
+        setStatus(message.message || i18n.deployProdEnvInProgress, 'info');
         setBusy(true);
         return;
       }

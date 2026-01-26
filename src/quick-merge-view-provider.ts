@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import type { ActionDeps } from "./actions/action-types";
 import {
   confirmDeployTest,
+  confirmDeployProdEnv,
   handleDeployProd,
   handleDeployTest,
   handleMergeToTest,
@@ -51,6 +52,8 @@ export class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       handleSquashDeployProd: (repoRoot) =>
         handleSquashDeployProd(this.deps, repoRoot),
       confirmDeployTest: (message) => confirmDeployTest(this.deps, message),
+      confirmDeployProdEnv: (repoRoot) =>
+        confirmDeployProdEnv(this.deps, repoRoot),
       commitDemandCode: (repoRoot) => commitDemandCode(this.deps, repoRoot),
       checkoutOriginal: () => checkoutOriginal(this.deps),
       openConflictFiles: () => this.openConflictFiles(),

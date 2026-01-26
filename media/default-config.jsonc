@@ -48,6 +48,19 @@
   // 发布到生产环境配置（基于最新分支创建当天分支并合并）
   "deployToProd": {
     // 发布分支前缀数组
-    "prodPrefix": ["release"]
+    "prodPrefix": [
+      "release",
+      {
+        "prefix": "hotfix",
+        "jenkins": {
+          "url": "",
+          "job": ""
+        }
+      }
+    ],
+    // 是否自动触发 Jenkins 构建（默认 false，仅打开 Jenkins 页面）
+    "autoDeploy": false,
+    // 自动传参的 Jenkins 分支参数名（默认 branch）
+    "branchParamName": "branch"
   }
 }

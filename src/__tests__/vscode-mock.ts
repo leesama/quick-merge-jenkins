@@ -166,6 +166,7 @@ export const window = {
   },
   createQuickPick<T>() {
     const acceptListeners: Array<() => void> = [];
+    const changeListeners: Array<() => void> = [];
     const hideListeners: Array<() => void> = [];
     const quickPick = {
       items: [] as T[],
@@ -174,6 +175,10 @@ export const window = {
       placeholder: "",
       onDidAccept(callback: () => void) {
         acceptListeners.push(callback);
+        return { dispose() {} };
+      },
+      onDidChangeSelection(callback: () => void) {
+        changeListeners.push(callback);
         return { dispose() {} };
       },
       onDidHide(callback: () => void) {
@@ -202,6 +207,7 @@ export const window = {
           quickPick.selectedItems =
             quickPick.items.length > 0 ? [quickPick.items[0]] : [];
         }
+        changeListeners.forEach((listener) => listener());
         acceptListeners.forEach((listener) => listener());
       },
       hide() {
@@ -219,6 +225,7 @@ export const window = {
       } else {
         quickPick.selectedItems = [result];
       }
+      changeListeners.forEach((listener) => listener());
       acceptListeners.forEach((listener) => listener());
     };
     return quickPick;

@@ -48,6 +48,19 @@
   // Deploy to production config (create today's branch from latest prefix branch)
   "deployToProd": {
     // Branch prefix list for production releases
-    "prodPrefix": ["release"]
+    "prodPrefix": [
+      "release",
+      {
+        "prefix": "hotfix",
+        "jenkins": {
+          "url": "",
+          "job": ""
+        }
+      }
+    ],
+    // Auto trigger Jenkins build (default false; only opens Jenkins page)
+    "autoDeploy": false,
+    // Jenkins branch parameter name for auto injection (default: branch)
+    "branchParamName": "branch"
   }
 }

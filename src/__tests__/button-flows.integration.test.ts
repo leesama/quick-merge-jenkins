@@ -8,6 +8,7 @@ import * as vscode from "vscode";
 import type { ActionDeps } from "../actions/action-types";
 import {
   confirmDeployTest,
+  confirmDeployProdEnv,
   handleDeployProd,
   handleDeployTest,
   handleMergeToTest,
@@ -102,6 +103,7 @@ function createMessageDeps(deps: ActionDeps): WebviewMessageHandlerDeps {
     handleDeployProd: (repoRoot) => handleDeployProd(deps, repoRoot),
     handleSquashDeployProd: (repoRoot) => handleSquashDeployProd(deps, repoRoot),
     confirmDeployTest: (message) => confirmDeployTest(deps, message),
+    confirmDeployProdEnv: (repoRoot) => confirmDeployProdEnv(deps, repoRoot),
     commitDemandCode: (repoRoot) => commitDemandCode(deps, repoRoot),
     checkoutOriginal: () => checkoutOriginal(deps),
     openConflictFiles: () => openConflictFilesAction(),
@@ -414,6 +416,57 @@ test("button: deployProd creates prod branch and merges", async (t) => {
   assert.ok(branches.includes(targetBranch));
   const message = await runGit(["log", "-1", "--pretty=%B", targetBranch], cwd);
   assert.equal(message.stdout.trim(), "feat: prod");
+});
+
+test("button: confirmDeployProdEnv triggers jenkins per prefix", async (t) => {
+  const cwd = await createTempRepo(t);
+  setupWorkspace(cwd);
+  const { deps } = createActionDeps();
+  const handlerDeps = createMessageDeps(deps);
+  await commitFile(cwd, "file.txt", "base\n", "chore: init");
+  await runGit(["branch", "release_20240101"], cwd);
+  await runGit(["branch", "hotfix_20240102"], cwd);
+
+  await writeConfig(cwd, {
+    deployToProd: {
+      prodPrefix: [
+        {
+          prefix: "release",
+          jenkins: { url: "http://jenkins", job: "prod-job" },
+        },
+        {
+          prefix: "hotfix",
+          jenkins: { url: "http://jenkins-2", job: "prod-job-2" },
+        },
+      ],
+      autoDeploy: true,
+    },
+  });
+
+  const jenkins = require("../jenkins") as {
+    triggerJenkinsBuild: (...args: any[]) => Promise<void>;
+  };
+  const originalTrigger = jenkins.triggerJenkinsBuild;
+  const calls: any[] = [];
+  jenkins.triggerJenkinsBuild = async (...args: any[]) => {
+    calls.push(args);
+  };
+  t.after(() => {
+    jenkins.triggerJenkinsBuild = originalTrigger;
+  });
+
+  vscodeMock.queueInfoMessage("Confirm");
+  vscodeMock.queueInfoMessage("Confirm");
+  vscodeMock.queueInfoMessage("OK");
+  vscodeMock.queueInfoMessage("Cancel");
+
+  await handleWebviewMessage(
+    { type: "confirmDeployProdEnv", repoRoot: cwd },
+    handlerDeps
+  );
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][1].targetBranch, "release_20240101");
 });
 
 test("button: rebaseSquash squashes selected commits", async (t) => {

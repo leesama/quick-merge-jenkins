@@ -12,7 +12,5 @@
   "config.deepseekModel": "DeepSeek model name.",
   "config.jenkinsUrl": "Jenkins base URL used as a fallback for deploy-to-test.",
   "config.jenkinsUser": "Jenkins user used as a fallback for deploy-to-test.",
-  "config.jenkinsApiToken": "Jenkins API token used as a fallback for deploy-to-test.",
-  "config.jenkinsProdUrl": "Jenkins base URL used for prod merge page opening.",
-  "config.jenkinsProdJob": "Jenkins job path used for prod merge page opening."
+  "config.jenkinsApiToken": "Jenkins API token used as a fallback for deploy-to-test."
 }

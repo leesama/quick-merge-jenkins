@@ -12,7 +12,5 @@
   "config.deepseekModel": "DeepSeek 模型名称。",
   "config.jenkinsUrl": "Jenkins 基地址，作为部署到测试环境的兜底配置。",
   "config.jenkinsUser": "Jenkins 用户名，作为部署到测试环境的兜底配置。",
-  "config.jenkinsApiToken": "Jenkins API Token，作为部署到测试环境的兜底配置。",
-  "config.jenkinsProdUrl": "生产 Jenkins 基地址，用于生产合并后打开页面。",
-  "config.jenkinsProdJob": "生产 Jenkins Job 路径，用于生产合并后打开页面。"
+  "config.jenkinsApiToken": "Jenkins API Token，作为部署到测试环境的兜底配置。"
 }

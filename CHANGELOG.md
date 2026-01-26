@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.1
+
+- Add a production deploy button with safer confirmation flow and date checks.
+- Support `deployToProd.prodPrefix` as strings or objects with per-prefix Jenkins config.
+- Default production deploy to open Jenkins only; add `autoDeploy` and `branchParamName` for auto-triggering.
+- Auto-inject branch parameters for prod deploys and normalize remote branch refs.
+- Unify Jenkins fallback settings via VS Code global config; remove prod-specific settings.
+- Enforce continuous selection from latest commit in squash UI.
+- Update docs and default config to reflect new prod deploy behavior.
+
 ## 2.1.0
 
 - Open production Jenkins page after prod merge actions using new prod Jenkins config.

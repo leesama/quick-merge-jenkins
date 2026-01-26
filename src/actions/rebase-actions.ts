@@ -145,25 +145,81 @@ export async function handleRebaseSquash(
     }
 
     const preSelectedIndices = findConsecutiveCommitGroup(commits);
+    const usePreset =
+      preSelectedIndices.length >= 2 && preSelectedIndices[0] === 0;
 
-    const items: vscode.QuickPickItem[] = commits.map((c, i) => ({
+    type CommitPick = vscode.QuickPickItem & { index: number };
+    const items: CommitPick[] = commits.map((c, i) => ({
       label: c.message,
       description: c.hash.substring(0, 7),
-      picked: preSelectedIndices.includes(i),
+      picked: usePreset ? preSelectedIndices.includes(i) : false,
+      index: i,
     }));
 
-    const selected = await vscode.window.showQuickPick(items, {
-      canPickMany: true,
-      placeHolder: t("rebaseSelectCommits"),
+    const selected = await new Promise<CommitPick[] | undefined>((resolve) => {
+      const quickPick = vscode.window.createQuickPick<CommitPick>();
+      const disposables: vscode.Disposable[] = [];
+      const cleanup = () => {
+        disposables.forEach((d) => d.dispose());
+        quickPick.dispose();
+      };
+      const enforceSelection = () => {
+        if (quickPick.selectedItems.length === 0) {
+          return;
+        }
+        const maxIndex = Math.max(
+          ...quickPick.selectedItems.map((item) => item.index)
+        );
+        quickPick.selectedItems = quickPick.items.filter(
+          (item) => item.index <= maxIndex
+        );
+      };
+      quickPick.canSelectMany = true;
+      quickPick.items = items;
+      quickPick.placeholder = t("rebaseSelectCommits");
+      quickPick.selectedItems = items.filter((item) => item.picked);
+      disposables.push(
+        quickPick.onDidChangeSelection(() => {
+          enforceSelection();
+        })
+      );
+      disposables.push(
+        quickPick.onDidAccept(() => {
+          enforceSelection();
+          const result = [...quickPick.selectedItems];
+          cleanup();
+          resolve(result);
+        })
+      );
+      disposables.push(
+        quickPick.onDidHide(() => {
+          cleanup();
+          resolve(undefined);
+        })
+      );
+      quickPick.show();
+      enforceSelection();
     });
 
     if (!selected || selected.length < 2) {
       return false;
     }
 
-    const selectedIndices = selected.map((s) =>
-      items.findIndex((item) => item === s)
+    const selectedIndices = selected
+      .map((s) => s.index)
+      .filter((index) => index >= 0)
+      .sort((a, b) => a - b);
+    if (selectedIndices[0] !== 0) {
+      notifyError(t("rebaseSelectFromLatest"));
+      return false;
+    }
+    const hasGap = selectedIndices.some((index, i) =>
+      i === 0 ? false : index !== selectedIndices[i - 1] + 1
     );
+    if (hasGap) {
+      notifyError(t("rebaseSelectConsecutive"));
+      return false;
+    }
     const maxIndex = Math.max(...selectedIndices);
     const count = maxIndex + 1;
 

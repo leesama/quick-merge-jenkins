@@ -36,6 +36,7 @@
 - **发布到测试环境**：自动合并当前分支到目标测试分支（可配置，默认 `pre-test`），并触发 Jenkins 构建
   - 展示合并结果（commit、变更文件、耗时）
   - 展示 Jenkins 触发结果
+- **提交合并并发布测试**：先提交当前改动，再合并到目标测试分支并触发 Jenkins 构建
 
 #### 冲突处理
 
@@ -56,12 +57,13 @@
 准备上线时，使用以下按钮：
 
 - **合并到生产**：基于最新的发布分支（前缀可配置，如 `release`、`hotfix`）创建当天发布分支，并合并选择的 feat 分支（不包含实际发布能力）
+- **部署到生产环境**：默认仅打开 Jenkins 页面；当 `deployToProd.autoDeploy` 开启时，逐个确认并触发各前缀最新生产分支的 Jenkins 构建（若最新分支日期不是今天会额外确认）
 
 或者一步完成整理和合并：
 
 - **合并提交并合并到生产**：先执行合并提交，再创建发布分支并合并当前分支
 
-上述两个按钮完成后，会自动打开 Jenkins 页面（优先使用 `deployToProd.jenkins`，其次使用 `quick-merge-jenkins.jenkinsProdUrl`/`jenkinsProdJob`），方便手动触发。
+合并相关按钮完成后，会自动打开所选前缀对应的 Jenkins 页面（若未配置则使用 VS Code 全局配置兜底）。
 
 ---
 
@@ -128,12 +130,18 @@
   // Create production branch config (create today's branch from latest prefix branch)
   "deployToProd": {
     // Branch prefix list for production releases
-    "prodPrefix": ["release", "hotfix"],
-    // Jenkins page for production manual trigger
-    "jenkins": {
-      "url": "https://jenkins-prod.example.com",
-      "job": "team/release/deploy-prod"
-    }
+    "prodPrefix": [
+      "release",
+      {
+        "prefix": "hotfix",
+        "jenkins": {
+          "url": "https://jenkins-prod.example.com",
+          "job": "team/release/deploy-prod"
+        }
+      }
+    ],
+    // 是否自动触发 Jenkins 构建（默认 false）
+    "autoDeploy": false
   }
 }
 ```
@@ -155,10 +163,9 @@
 - `commit`：提交设置（可选）
   - `pushAfterCommit`：提交后是否自动推送（默认 `true`）
 - `deployToProd`：创建生产分支配置（可选）
-  - `prodPrefix`：发布分支前缀数组（例如 `release`、`hotfix`），点击创建时会列出各前缀最新分支供多选
-  - `jenkins`：生产 Jenkins 页面配置（可选）
-    - `url`：Jenkins 基地址
-    - `job`：Jenkins Job 路径（可选）
+  - `prodPrefix`：发布分支前缀数组，支持字符串或对象 `{ prefix, jenkins }`（按前缀配置 Jenkins）
+  - `autoDeploy`：点击部署到生产环境时是否自动触发 Jenkins 构建（默认 `false`，需配置 `prodPrefix[].jenkins.job`，url/user/token 可走全局兜底；未配置 parameters 时会自动传分支参数为最新生产分支）
+  - `branchParamName`：自动传参的分支参数名（默认 `branch`）
 
 ### Jenkins 配置
 
@@ -169,7 +176,7 @@
 - `parameters`：触发参数，支持变量：
   - `${currentBranch}` `${sourceBranch}` `${targetBranch}` `${mergeCommit}` `${headCommit}` `${deployEnv}`
 - `url`、`user`、`apiToken` 可通过 VS Code 设置提供兜底值
-- `deployToProd.jenkins` 仅用于生产合并后打开 Jenkins 页面
+- `deployToProd.prodPrefix[].jenkins` 用于生产部署（开启 `autoDeploy` 时），也用于生产合并后打开 Jenkins 页面；未配置则使用 VS Code 全局配置兜底；parameters 为空时会自动传分支参数
 
 ## 故障排查
 
@@ -202,13 +209,6 @@
 | `quick-merge-jenkins.jenkinsUser` | Jenkins 用户名 | - |
 | `quick-merge-jenkins.jenkinsApiToken` | Jenkins API Token | - |
 
-### Jenkins（生产页面）配置
-
-用于生产合并后打开 Jenkins 页面：
-
-| 配置项 | 说明 | 默认值 |
-|--------|------|--------|
-| `quick-merge-jenkins.jenkinsProdUrl` | 生产 Jenkins 基地址 | - |
-| `quick-merge-jenkins.jenkinsProdJob` | 生产 Jenkins Job 路径 | - |
+说明：生产部署会复用全局 Jenkins 配置（`jenkinsUrl`/`jenkinsUser`/`jenkinsApiToken`）作为兜底，Job 仍来自 `deployToProd.prodPrefix[].jenkins`。
 
 > 💡 **提示**：API Key、Token 等敏感信息建议配置在 VS Code 全局设置中，避免提交到版本库。

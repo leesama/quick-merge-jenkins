@@ -87,18 +87,6 @@
           "default": "",
           "markdownDescription": "%config.jenkinsApiToken%",
           "scope": "machine"
-        },
-        "quick-merge-jenkins.jenkinsProdUrl": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "%config.jenkinsProdUrl%",
-          "scope": "machine"
-        },
-        "quick-merge-jenkins.jenkinsProdJob": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "%config.jenkinsProdJob%",
-          "scope": "machine"
         }
       }
     }

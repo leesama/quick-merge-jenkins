@@ -5,6 +5,7 @@ export interface WebviewMessageHandlerDeps {
   handleDeployProd: (repoRoot?: string) => Promise<void>;
   handleSquashDeployProd: (repoRoot?: string) => Promise<void>;
   confirmDeployTest: (message: any) => Promise<void>;
+  confirmDeployProdEnv: (repoRoot?: string) => Promise<void>;
   commitDemandCode: (repoRoot?: string) => Promise<void>;
   checkoutOriginal: () => Promise<void>;
   openConflictFiles: () => Promise<void>;
@@ -46,6 +47,10 @@ export async function handleWebviewMessage(
   }
   if (type === "confirmDeployTest") {
     await deps.confirmDeployTest(message);
+    return;
+  }
+  if (type === "confirmDeployProdEnv") {
+    await deps.confirmDeployProdEnv(extractRepoRoot(message));
     return;
   }
   if (type === "commitDemand") {

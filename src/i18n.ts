@@ -2,9 +2,22 @@ type Locale = "zh" | "en";
 
 const MESSAGES = {
   confirm: { zh: "确认", en: "Confirm" },
+  cancel: { zh: "取消", en: "Cancel" },
   deployTestConfirm: {
     zh: "确认发布到测试环境？",
     en: "Confirm deploy to test?",
+  },
+  deployProdEnvConfirm: {
+    zh: "确认发布到生产环境？",
+    en: "Confirm deploy to production?",
+  },
+  deployProdEnvBranchConfirm: {
+    zh: "确认部署生产分支：{branch}？",
+    en: "Confirm deploy production branch: {branch}?",
+  },
+  deployProdEnvDateConfirm: {
+    zh: "检测到最新生产分支 {branch}，日期为 {date}（今天：{today}）。是否继续部署？",
+    en: "Latest prod branch {branch} is dated {date} (today: {today}). Continue deploy?",
   },
   deployTestConfirmWithLabel: {
     zh: "确认发布到测试环境：{label}？",
@@ -78,8 +91,8 @@ const MESSAGES = {
     en: "Jenkins config missing url or job.",
   },
   jenkinsUrlMissing: {
-    zh: "未配置生产 Jenkins 地址，已跳过打开页面。",
-    en: "Production Jenkins URL is not configured; skipped opening page.",
+    zh: "未配置 Jenkins 地址，已跳过打开页面。",
+    en: "Jenkins URL is not configured; skipped opening page.",
   },
   jenkinsOpenFailed: {
     zh: "打开 Jenkins 页面失败：{error}",
@@ -191,6 +204,10 @@ const MESSAGES = {
     zh: "正在创建生产分支并合并...",
     en: "Creating production branch and merging...",
   },
+  deployProdEnvStarted: {
+    zh: "正在发布到生产环境...",
+    en: "Deploying to production...",
+  },
   deployTestSuccess: {
     zh: "已触发测试环境发布：{job}",
     en: "Triggered test deploy: {job}",
@@ -199,6 +216,10 @@ const MESSAGES = {
     zh: "已创建生产分支并完成合并：{branch}",
     en: "Created production branch and merged: {branch}",
   },
+  deployProdEnvSuccess: {
+    zh: "已触发生产环境发布：{job}（{branch}）",
+    en: "Triggered production deploy: {job} ({branch})",
+  },
   deployTestFailed: {
     zh: "发布到测试环境失败：{error}",
     en: "Test deploy failed: {error}",
@@ -206,6 +227,10 @@ const MESSAGES = {
   deployProdFailed: {
     zh: "创建生产分支并合并失败：{error}",
     en: "Create production branch and merge failed: {error}",
+  },
+  deployProdEnvFailed: {
+    zh: "发布到生产环境失败：{error}",
+    en: "Production deploy failed: {error}",
   },
   deployProdPrefixEmpty: {
     zh: "生产分支前缀为空，请在配置文件 deployToProd.prodPrefix 中设置。",
@@ -230,6 +255,14 @@ const MESSAGES = {
   deployTestMissingConfig: {
     zh: "测试环境发布配置缺少 Jenkins 信息。",
     en: "Test deploy config missing Jenkins info.",
+  },
+  deployProdMissingConfig: {
+    zh: "生产环境发布配置缺少 Jenkins 信息。",
+    en: "Production deploy config missing Jenkins info.",
+  },
+  deployProdJobMissing: {
+    zh: "生产部署缺少 Jenkins Job，请在 deployToProd.prodPrefix 中配置（前缀：{prefix}）。",
+    en: "Missing Jenkins job for prod deploy; configure deployToProd.prodPrefix (prefix: {prefix}).",
   },
   workspaceNotFound: { zh: "未找到工作区。", en: "Workspace not found." },
   workspaceOpenProject: {
@@ -292,6 +325,14 @@ const MESSAGES = {
     zh: "没有可合并的提交。",
     en: "No commits to squash.",
   },
+  rebaseSelectConsecutive: {
+    zh: "只能选择连续的提交，请重新选择。",
+    en: "Only consecutive commits are allowed; please reselect.",
+  },
+  rebaseSelectFromLatest: {
+    zh: "请选择从最新提交开始的连续提交。",
+    en: "Select consecutive commits starting from the latest one.",
+  },
   rebaseSuccess: {
     zh: "成功合并 {count} 个提交。",
     en: "Squashed {count} commits.",
@@ -336,6 +377,7 @@ const MESSAGES = {
   },
   deployTestLabel: { zh: "发布到测试环境", en: "Deploy to Test" },
   deployProdLabel: { zh: "合并到生产", en: "Merge into Prod" },
+  deployProdEnvLabel: { zh: "部署到生产环境", en: "Deploy to Prod" },
   squashDeployProdLabel: {
     zh: "合并提交并合并到生产",
     en: "Squash & Merge into Prod",
@@ -353,7 +395,10 @@ const MESSAGES = {
     zh: "选择要合并提交的分支",
     en: "Select a branch to squash",
   },
-  commitAndDeploy: { zh: "提交并发布到测试", en: "Commit & Deploy to Test" },
+  commitAndDeploy: {
+    zh: "提交合并并发布测试",
+    en: "Commit, Merge & Deploy to Test",
+  },
   refreshHint: {
     zh: "正在读取配置...",
     en: "Loading config...",
@@ -487,6 +532,8 @@ export interface WebviewStrings {
   deployTestMissingConfig: string;
   deployProdLabel: string;
   deployProdInProgress: string;
+  deployProdEnvLabel: string;
+  deployProdEnvInProgress: string;
   squashDeployProdLabel: string;
   genericError: string;
   configErrorMessage: string;
@@ -504,6 +551,7 @@ export function getWebviewStrings(): WebviewStrings {
     stayOnTarget: t("stayOnTarget"),
     deployTestLabel: t("deployTestLabel"),
     deployProdLabel: t("deployProdLabel"),
+    deployProdEnvLabel: t("deployProdEnvLabel"),
     squashDeployProdLabel: t("squashDeployProdLabel"),
     demandCreate: t("demandCreate"),
     demandCommit: t("demandCommit"),
@@ -538,6 +586,7 @@ export function getWebviewStrings(): WebviewStrings {
     deployTestInProgress: t("deployTestStarted"),
     deployTestMissingConfig: t("deployTestMissingConfig"),
     deployProdInProgress: t("deployProdStarted"),
+    deployProdEnvInProgress: t("deployProdEnvStarted"),
     genericError: t("genericError"),
     configErrorMessage: t("configErrorMessage"),
     listSeparator: t("listSeparator"),

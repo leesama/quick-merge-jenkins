@@ -38,6 +38,7 @@ After development, deploy to the test environment:
 - **Deploy to test**: Auto-merge current branch to target test branch (configurable, default `pre-test`) and trigger Jenkins build
   - Shows merge result (commit, changed files, duration)
   - Shows Jenkins trigger result
+- **Commit, Merge & Deploy to Test**: Commit current changes first, then merge into the target test branch and trigger Jenkins build
 
 #### Conflict Handling
 
@@ -58,12 +59,13 @@ After testing passes, optionally clean up commit history before release:
 When ready to release:
 
 - **Merge into Prod**: Create today's release branch from the latest release branch (prefix configurable, e.g., `release`, `hotfix`), then merge selected feature branches. This does not trigger an actual production deploy.
+- **Deploy to Prod**: Open the Jenkins page by default; if `deployToProd.autoDeploy` is enabled, confirm and trigger Jenkins builds for the latest production branch per prefix. If the latest branch is not today, an extra confirmation is required.
 
 Or complete squash and merge in one step:
 
 - **Squash & Merge into Prod**: First squash commits, then create release branch and merge current branch
 
-After either action completes, the extension opens the Jenkins page (from `deployToProd.jenkins` or VS Code settings `quick-merge-jenkins.jenkinsProdUrl`/`jenkinsProdJob`) so you can trigger manually.
+After merge actions complete, the extension opens the Jenkins page configured in the selected prefix (falls back to VS Code settings if missing).
 
 ---
 
@@ -130,12 +132,18 @@ Example:
   // Create production branch config (create today's branch from latest prefix branch)
   "deployToProd": {
     // Branch prefix list for production releases
-    "prodPrefix": ["release", "hotfix"],
-    // Jenkins page for production manual trigger
-    "jenkins": {
-      "url": "https://jenkins-prod.example.com",
-      "job": "team/release/deploy-prod"
-    }
+    "prodPrefix": [
+      "release",
+      {
+        "prefix": "hotfix",
+        "jenkins": {
+          "url": "https://jenkins-prod.example.com",
+          "job": "team/release/deploy-prod"
+        }
+      }
+    ],
+    // Auto trigger Jenkins build when clicking Deploy to Prod (default: false)
+    "autoDeploy": false
   }
 }
 ```
@@ -157,10 +165,9 @@ Example:
 - `commit`: Commit config (optional)
   - `pushAfterCommit`: Push after commit (default `true`)
 - `deployToProd`: Create production branch config (optional)
-  - `prodPrefix`: Branch prefix list (e.g., `release`, `hotfix`); clicking create shows the latest branch per prefix for multi-select
-  - `jenkins`: Jenkins page config for prod (optional)
-    - `url`: Jenkins base URL
-    - `job`: Jenkins job path to open (optional)
+  - `prodPrefix`: Branch prefix list, supports strings or objects `{ prefix, jenkins }` (per-prefix Jenkins config); clicking create shows the latest branch per prefix for multi-select
+  - `autoDeploy`: Auto trigger Jenkins build when clicking Deploy to Prod (default `false`, requires `prodPrefix[].jenkins.job`; url/user/token can fall back to VS Code settings; if no parameters provided, the branch param defaults to the latest prod branch ref)
+  - `branchParamName`: Jenkins parameter name for the branch when auto-injecting (default `branch`)
 
 ### Jenkins Config
 
@@ -171,7 +178,7 @@ Example:
 - `parameters`: Supports variables:
   - `${currentBranch}` `${sourceBranch}` `${targetBranch}` `${mergeCommit}` `${headCommit}` `${deployEnv}`
 - `url`, `user`, `apiToken` can be omitted if set in VS Code settings
-- `deployToProd.jenkins` is only used to open the Jenkins page after prod merge
+- `deployToProd.prodPrefix[].jenkins` is used for prod deploy (when `autoDeploy` is enabled) and to open the Jenkins page after prod merge; falls back to VS Code settings when missing; when parameters are empty, the branch param is sent automatically
 
 ## Troubleshooting
 
@@ -204,13 +211,6 @@ Used for authentication when triggering Jenkins builds:
 | `quick-merge-jenkins.jenkinsUser` | Jenkins username | - |
 | `quick-merge-jenkins.jenkinsApiToken` | Jenkins API token | - |
 
-### Jenkins (Prod Page) Configuration
-
-Used to open the production Jenkins page after prod merge:
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `quick-merge-jenkins.jenkinsProdUrl` | Jenkins base URL for prod page | - |
-| `quick-merge-jenkins.jenkinsProdJob` | Jenkins job path for prod page | - |
+Note: Global Jenkins settings are also used as fallback for production deploy (base URL/user/token). The job name still comes from `deployToProd.prodPrefix[].jenkins`.
 
 > 💡 **Tip**: Sensitive information like API Keys and Tokens should be configured in VS Code global settings to avoid committing them to version control.
