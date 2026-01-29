@@ -121,3 +121,7 @@
 - 更稳定的发布质量
 - 更低的团队协作成本
 - 更可控的生产发布风险
+
+## 9. 项目地址
+- VS Code Marketplace：https://marketplace.visualstudio.com/items?itemName=leesama-tools.quick-merge-jenkins
+- GitHub 中文文档：https://github.com/leesama/quick-merge-jenkins/blob/main/README.zh-CN.md
