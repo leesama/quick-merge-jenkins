@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.1.2
+
+- Fix demand branch creation to avoid automatically tracking the base remote branch.
+- Add a regression test for creating demand branches from remote `zsxr_*` branches.
+
 ## 2.1.1
 
 - Add a production deploy button with safer confirmation flow and date checks.
