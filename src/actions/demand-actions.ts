@@ -201,7 +201,7 @@ export async function createDemandBranch(
       notifyError(t("branchExists", { branchName }));
       return;
     }
-    await runGit(["checkout", "-b", branchName, baseBranch], cwd);
+    await runGit(["checkout", "--no-track", "-b", branchName, baseBranch], cwd);
     await saveDemandMessage(deps, cwd, demandMessage);
     await runGit(["commit", "--allow-empty", "-m", demandMessage], cwd);
     notifyInfo(t("emptyCommitCreated", { message: demandMessage }));

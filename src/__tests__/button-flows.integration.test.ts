@@ -250,6 +250,55 @@ test("button: createDemandBranch creates branch and empty commit", async (t) => 
   assert.equal(state.lastDemandMessages[cwd], "feat: 优化登录");
 });
 
+test("button: createDemandBranch from remote release branch does not set upstream", async (t) => {
+  const cwd = await createTempRepo(t);
+  const remote = await createBareRemote(t);
+  setupWorkspace(cwd);
+  const { deps } = createActionDeps();
+  const handlerDeps = createMessageDeps(deps);
+  await commitFile(cwd, "file.txt", "base\n", "chore: init");
+  await runGit(["branch", "-M", "zsxr_20240101"], cwd);
+  await setRemoteAndPush(cwd, remote, "zsxr_20240101");
+  await runGit(["fetch", "origin"], cwd);
+  await writeConfig(cwd, {
+    demandBranch: {
+      types: [{ prefix: "feature", commitPrefix: "feat" }],
+      releasePrefix: "zsxr",
+      deepseekApiKey: "test-key",
+      deepseekBaseUrl: "http://localhost",
+      deepseekModel: "test-model",
+    },
+  });
+
+  const deepseek = require("../deepseek") as {
+    translateToEnglish: (input: string) => Promise<string>;
+  };
+  const originalTranslate = deepseek.translateToEnglish;
+  deepseek.translateToEnglish = async () => "channel links";
+  t.after(() => {
+    deepseek.translateToEnglish = originalTranslate;
+  });
+
+  vscodeMock.queueInputBox("渠道链接优化");
+
+  const dateStamp = formatDateStamp(new Date());
+  await handleWebviewMessage(
+    { type: "createDemandBranch", repoRoot: cwd },
+    handlerDeps
+  );
+
+  const expectedBranch = `feature_channel_links_${dateStamp}`;
+  const currentBranch = await getCurrentBranch(cwd);
+  assert.equal(currentBranch, expectedBranch);
+
+  const configPath = path.join(cwd, ".git", "config");
+  const gitConfig = await fs.readFile(configPath, "utf8");
+  assert.equal(
+    gitConfig.includes(`[branch "${expectedBranch}"]`),
+    false
+  );
+});
+
 test("button: commitDemand commits staged changes", async (t) => {
   const cwd = await createTempRepo(t);
   setupWorkspace(cwd);
