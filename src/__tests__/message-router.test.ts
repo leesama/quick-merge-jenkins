@@ -23,7 +23,6 @@ function createDeps(): {
     handleDeployTest: createAsyncSpy(),
     handleMergeToTest: createAsyncSpy(),
     handleDeployProd: createAsyncSpy(),
-    handleSquashDeployProd: createAsyncSpy(),
     confirmDeployTest: createAsyncSpy(),
     confirmDeployProdEnv: createAsyncSpy(),
     commitDemandCode: createAsyncSpy(),
@@ -32,7 +31,6 @@ function createDeps(): {
     openMergeEditor: createAsyncSpy(),
     openConfig: createAsyncSpy(),
     confirmCommitAndDeploy: createAsyncSpy(),
-    handleRebaseSquashWithPrompt: createAsyncSpy(),
     createDemandBranch: createAsyncSpy(),
   };
   const deps: WebviewMessageHandlerDeps = {
@@ -40,7 +38,6 @@ function createDeps(): {
     handleDeployTest: spies.handleDeployTest.fn,
     handleMergeToTest: spies.handleMergeToTest.fn,
     handleDeployProd: spies.handleDeployProd.fn,
-    handleSquashDeployProd: spies.handleSquashDeployProd.fn,
     confirmDeployTest: spies.confirmDeployTest.fn,
     confirmDeployProdEnv: spies.confirmDeployProdEnv.fn,
     commitDemandCode: spies.commitDemandCode.fn,
@@ -49,7 +46,6 @@ function createDeps(): {
     openMergeEditor: spies.openMergeEditor.fn,
     openConfig: spies.openConfig.fn,
     confirmCommitAndDeploy: spies.confirmCommitAndDeploy.fn,
-    handleRebaseSquashWithPrompt: spies.handleRebaseSquashWithPrompt.fn,
     createDemandBranch: spies.createDemandBranch.fn,
   };
   return { deps, spies };

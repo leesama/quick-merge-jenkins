@@ -48,22 +48,12 @@ If conflicts occur during merge:
 - Click a conflict file to open VS Code's built-in merge editor
 - After resolving, continue pushing, or click to return to original branch
 
-### Step 5: Squash Commits
-
-After testing passes, optionally clean up commit history before release:
-
-- **Squash commits**: Defaults to selecting recent commits with the same prefix on current branch. Manually adjust selection range, then confirm to squash into one commit for a clean history.
-
-### Step 6: Create Production Branch
+### Step 5: Create Production Branch
 
 When ready to release:
 
 - **Merge into Prod**: Create today's release branch from the latest release branch (prefix configurable, e.g., `release`, `hotfix`), then merge selected feature branches. This does not trigger an actual production deploy.
 - **Deploy to Prod**: Open the Jenkins page by default; if `deployToProd.autoDeploy` is enabled, confirm and trigger Jenkins builds for the latest production branch per prefix. If the latest branch is not today, an extra confirmation is required.
-
-Or complete squash and merge in one step:
-
-- **Squash & Merge into Prod**: First squash commits, then create release branch and merge current branch
 
 After merge actions complete, the extension opens the Jenkins page configured in the selected prefix (falls back to VS Code settings if missing).
 

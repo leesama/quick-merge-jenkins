@@ -12,7 +12,6 @@ import {
   handleDeployProd,
   handleDeployTest,
   handleMergeToTest,
-  handleSquashDeployProd,
 } from "../actions/deploy-actions";
 import {
   commitDemandCode,
@@ -20,7 +19,6 @@ import {
   createDemandBranch,
   saveDemandMessage,
 } from "../actions/demand-actions";
-import { handleRebaseSquashWithPrompt } from "../actions/rebase-actions";
 import {
   checkoutOriginal,
   openConfig as openConfigAction,
@@ -101,7 +99,6 @@ function createMessageDeps(deps: ActionDeps): WebviewMessageHandlerDeps {
     handleDeployTest: (message) => handleDeployTest(deps, message),
     handleMergeToTest: (message) => handleMergeToTest(deps, message),
     handleDeployProd: (repoRoot) => handleDeployProd(deps, repoRoot),
-    handleSquashDeployProd: (repoRoot) => handleSquashDeployProd(deps, repoRoot),
     confirmDeployTest: (message) => confirmDeployTest(deps, message),
     confirmDeployProdEnv: (repoRoot) => confirmDeployProdEnv(deps, repoRoot),
     commitDemandCode: (repoRoot) => commitDemandCode(deps, repoRoot),
@@ -110,8 +107,6 @@ function createMessageDeps(deps: ActionDeps): WebviewMessageHandlerDeps {
     openMergeEditor: () => openMergeEditorAction(),
     openConfig: (repoRoot) => openConfigAction(deps, repoRoot),
     confirmCommitAndDeploy: (repoRoot) => confirmCommitAndDeploy(deps, repoRoot),
-    handleRebaseSquashWithPrompt: (repoRoot) =>
-      handleRebaseSquashWithPrompt(deps, repoRoot),
     createDemandBranch: (repoRoot) => createDemandBranch(deps, repoRoot),
   };
 }
@@ -467,6 +462,48 @@ test("button: deployProd creates prod branch and merges", async (t) => {
   assert.equal(message.stdout.trim(), "feat: prod");
 });
 
+test("button: deployProd sets upstream to the new remote prod branch", async (t) => {
+  const cwd = await createTempRepo(t);
+  setupWorkspace(cwd);
+  const { deps } = createActionDeps();
+  const handlerDeps = createMessageDeps(deps);
+
+  await commitFile(cwd, "file.txt", "base\n", "chore: init");
+  await runGit(["checkout", "-b", "prod_20240101"], cwd);
+  const remote = await createBareRemote(t);
+  await setRemoteAndPush(cwd, remote, "prod_20240101");
+
+  await createBranch(cwd, "feat/deploy-prod-remote", "prod_20240101");
+  await commitFile(cwd, "file.txt", "base\nprod\n", "feat: prod");
+
+  await writeConfig(cwd, {
+    deployToProd: {
+      prodPrefix: ["prod"],
+    },
+  });
+
+  vscodeMock.queueQuickPick((items: any[]) => items.slice(0, 1));
+  vscodeMock.queueQuickPick((items: any[]) => items.slice(0, 1));
+
+  await handleWebviewMessage(
+    { type: "deployProd", repoRoot: cwd },
+    handlerDeps
+  );
+
+  const dateStamp = formatDateStamp(new Date());
+  const targetBranch = `prod_${dateStamp}`;
+  const upstream = await runGit(
+    [
+      "rev-parse",
+      "--abbrev-ref",
+      "--symbolic-full-name",
+      `${targetBranch}@{u}`,
+    ],
+    cwd
+  );
+  assert.equal(upstream.stdout.trim(), `origin/${targetBranch}`);
+});
+
 test("button: confirmDeployProdEnv triggers jenkins per prefix", async (t) => {
   const cwd = await createTempRepo(t);
   setupWorkspace(cwd);
@@ -516,64 +553,6 @@ test("button: confirmDeployProdEnv triggers jenkins per prefix", async (t) => {
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0][1].targetBranch, "release_20240101");
-});
-
-test("button: rebaseSquash squashes selected commits", async (t) => {
-  const cwd = await createTempRepo(t);
-  setupWorkspace(cwd);
-  const { deps } = createActionDeps();
-  const handlerDeps = createMessageDeps(deps);
-  await commitFile(cwd, "file.txt", "base\n", "chore: init");
-  await commitFile(cwd, "file.txt", "base\none\n", "feat: add");
-  await commitFile(cwd, "file.txt", "base\ntwo\n", "feat: add1");
-  const branch = await getCurrentBranch(cwd);
-  const remote = await createBareRemote(t);
-  await setRemoteAndPush(cwd, remote, branch);
-
-  vscodeMock.queueQuickPick((items: any[]) => items.slice(0, 2));
-
-  await handleWebviewMessage(
-    { type: "rebaseSquash", repoRoot: cwd },
-    handlerDeps
-  );
-
-  const count = await runGit(["rev-list", "--count", "HEAD"], cwd);
-  assert.equal(Number(count.stdout.trim()), 2);
-});
-
-test("button: squashDeployProd squashes then deploys", async (t) => {
-  const cwd = await createTempRepo(t);
-  setupWorkspace(cwd);
-  const { deps } = createActionDeps();
-  const handlerDeps = createMessageDeps(deps);
-  await commitFile(cwd, "file.txt", "base\n", "chore: init");
-  await runGit(["branch", "prod_20240101"], cwd);
-  await createBranch(cwd, "feat/squash-prod");
-  await commitFile(cwd, "file.txt", "base\none\n", "feat: add");
-  await commitFile(cwd, "file.txt", "base\ntwo\n", "feat: add1");
-  const branch = await getCurrentBranch(cwd);
-  const remote = await createBareRemote(t);
-  await setRemoteAndPush(cwd, remote, branch);
-
-  await writeConfig(cwd, {
-    deployToProd: {
-      prodPrefix: ["prod"],
-    },
-  });
-
-  vscodeMock.queueQuickPick((items: any[]) => items.slice(0, 2));
-  vscodeMock.queueQuickPick((items: any[]) => items.slice(0, 1));
-  vscodeMock.queueQuickPick((items: any[]) => items.slice(0, 1));
-
-  await handleWebviewMessage(
-    { type: "squashDeployProd", repoRoot: cwd },
-    handlerDeps
-  );
-
-  const dateStamp = formatDateStamp(new Date());
-  const targetBranch = `prod_${dateStamp}`;
-  const branches = await listBranches(cwd);
-  assert.ok(branches.includes(targetBranch));
 });
 
 test("button: confirmCommitAndDeploy commits then deploys", async (t) => {

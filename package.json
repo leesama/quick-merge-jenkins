@@ -92,9 +92,10 @@
     }
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
+    "compile": "npm run clean && tsc -p ./",
     "test": "npm run compile && node --test --test-concurrency=1 --require ./dist/__tests__/setup-vscode.js dist/**/*.test.js",
-    "watch": "tsc -watch -p ./",
+    "watch": "npm run clean && tsc -watch -p ./",
     "vscode:prepublish": "npm run compile",
     "publish:vsce": "vsce publish",
     "publish:ovsx": "ovsx publish",

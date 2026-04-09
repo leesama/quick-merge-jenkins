@@ -7,14 +7,12 @@ import {
   handleDeployProd,
   handleDeployTest,
   handleMergeToTest,
-  handleSquashDeployProd,
 } from "./actions/deploy-actions";
 import {
   commitDemandCode,
   confirmCommitAndDeploy,
   createDemandBranch,
 } from "./actions/demand-actions";
-import { handleRebaseSquashWithPrompt } from "./actions/rebase-actions";
 import { postState } from "./actions/state-actions";
 import {
   checkoutOriginal,
@@ -49,8 +47,6 @@ export class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       handleDeployTest: (message) => handleDeployTest(this.deps, message),
       handleMergeToTest: (message) => handleMergeToTest(this.deps, message),
       handleDeployProd: (repoRoot) => handleDeployProd(this.deps, repoRoot),
-      handleSquashDeployProd: (repoRoot) =>
-        handleSquashDeployProd(this.deps, repoRoot),
       confirmDeployTest: (message) => confirmDeployTest(this.deps, message),
       confirmDeployProdEnv: (repoRoot) =>
         confirmDeployProdEnv(this.deps, repoRoot),
@@ -61,8 +57,6 @@ export class QuickMergeViewProvider implements vscode.WebviewViewProvider {
       openConfig: (repoRoot) => this.openConfig(repoRoot),
       confirmCommitAndDeploy: (repoRoot) =>
         confirmCommitAndDeploy(this.deps, repoRoot),
-      handleRebaseSquashWithPrompt: (repoRoot) =>
-        handleRebaseSquashWithPrompt(this.deps, repoRoot),
       createDemandBranch: (repoRoot) =>
         createDemandBranch(this.deps, repoRoot),
     };

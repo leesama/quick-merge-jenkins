@@ -317,34 +317,6 @@ const MESSAGES = {
     zh: "未找到需求描述，请先创建需求分支。",
     en: "No demand description found; create a demand branch first.",
   },
-  rebaseSelectCommits: {
-    zh: "选择要合并的提交",
-    en: "Select commits to squash",
-  },
-  rebaseNoCommits: {
-    zh: "没有可合并的提交。",
-    en: "No commits to squash.",
-  },
-  rebaseSelectConsecutive: {
-    zh: "只能选择连续的提交，请重新选择。",
-    en: "Only consecutive commits are allowed; please reselect.",
-  },
-  rebaseSelectFromLatest: {
-    zh: "请选择从最新提交开始的连续提交。",
-    en: "Select consecutive commits starting from the latest one.",
-  },
-  rebaseSuccess: {
-    zh: "成功合并 {count} 个提交。",
-    en: "Squashed {count} commits.",
-  },
-  rebaseSuccessWithMessage: {
-    zh: "成功合并 {count} 个提交，提交信息：{message}",
-    en: "Squashed {count} commits. Message: {message}",
-  },
-  rebaseFailed: {
-    zh: "变基失败: {error}",
-    en: "Rebase failed: {error}",
-  },
   pullSkippedNoUpstream: {
     zh: "当前分支未设置上游，已跳过拉取：{branch}",
     en: "No upstream set; skipped pull for {branch}.",
@@ -378,23 +350,8 @@ const MESSAGES = {
   deployTestLabel: { zh: "发布到测试环境", en: "Deploy to Test" },
   deployProdLabel: { zh: "合并到生产", en: "Merge into Prod" },
   deployProdEnvLabel: { zh: "部署到生产环境", en: "Deploy to Prod" },
-  squashDeployProdLabel: {
-    zh: "合并提交并合并到生产",
-    en: "Squash & Merge into Prod",
-  },
   demandCreate: { zh: "创建需求分支", en: "Create Demand Branch" },
   demandCommit: { zh: "提交代码", en: "Commit Changes" },
-  rebaseSquash: { zh: "合并提交", en: "Squash Commits" },
-  squashMorePrompt: {
-    zh: "是否继续合并其他分支的提交？",
-    en: "Squash commits on another branch?",
-  },
-  squashMoreYes: { zh: "是", en: "Yes" },
-  squashMoreNo: { zh: "否", en: "No" },
-  squashPickBranchPlaceholder: {
-    zh: "选择要合并提交的分支",
-    en: "Select a branch to squash",
-  },
   commitAndDeploy: {
     zh: "提交合并并发布测试",
     en: "Commit, Merge & Deploy to Test",
@@ -499,7 +456,6 @@ export interface WebviewStrings {
   stayOnTarget: string;
   demandCreate: string;
   demandCommit: string;
-  rebaseSquash: string;
   commitAndDeploy: string;
   refreshHint: string;
   gitProjectLabel: string;
@@ -534,7 +490,6 @@ export interface WebviewStrings {
   deployProdInProgress: string;
   deployProdEnvLabel: string;
   deployProdEnvInProgress: string;
-  squashDeployProdLabel: string;
   genericError: string;
   configErrorMessage: string;
   listSeparator: string;
@@ -552,10 +507,8 @@ export function getWebviewStrings(): WebviewStrings {
     deployTestLabel: t("deployTestLabel"),
     deployProdLabel: t("deployProdLabel"),
     deployProdEnvLabel: t("deployProdEnvLabel"),
-    squashDeployProdLabel: t("squashDeployProdLabel"),
     demandCreate: t("demandCreate"),
     demandCommit: t("demandCommit"),
-    rebaseSquash: t("rebaseSquash"),
     commitAndDeploy: t("commitAndDeploy"),
     refreshHint: t("refreshHint"),
     gitProjectLabel: t("gitProjectLabel"),

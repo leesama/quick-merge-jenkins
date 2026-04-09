@@ -195,19 +195,6 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       font-size: 0.9em;
     }
 
-    .config-group-squash {
-      margin-top: 6px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .config-group-squash button {
-      width: 100%;
-      padding: 6px 10px;
-      font-size: 0.9em;
-    }
-
     .config-group-prod {
       margin-top: 6px;
       display: flex;
@@ -395,20 +382,12 @@ export function getWebviewHtml(webview: vscode.Webview): string {
       container.appendChild(actionsEl);
     }
 
-    function appendSquashButton(container, repoRoot) {
+    function appendProdButton(container, repoRoot) {
       if (!repoRoot) {
         return;
       }
       const actionsEl = document.createElement('div');
-      actionsEl.className = 'config-group-squash';
-      
-      const rebaseBtn = document.createElement('button');
-      rebaseBtn.className = 'secondary';
-      rebaseBtn.textContent = i18n.rebaseSquash;
-      rebaseBtn.addEventListener('click', () => {
-        vscode.postMessage({ type: 'rebaseSquash', repoRoot });
-      });
-      actionsEl.appendChild(rebaseBtn);
+      actionsEl.className = 'config-group-prod';
 
       const deployProdBtn = document.createElement('button');
       deployProdBtn.className = 'secondary';
@@ -417,14 +396,6 @@ export function getWebviewHtml(webview: vscode.Webview): string {
         vscode.postMessage({ type: 'deployProd', repoRoot });
       });
       actionsEl.appendChild(deployProdBtn);
-
-      const squashDeployProdBtn = document.createElement('button');
-      squashDeployProdBtn.className = 'secondary';
-      squashDeployProdBtn.textContent = i18n.squashDeployProdLabel;
-      squashDeployProdBtn.addEventListener('click', () => {
-        vscode.postMessage({ type: 'squashDeployProd', repoRoot });
-      });
-      actionsEl.appendChild(squashDeployProdBtn);
 
       const deployProdEnvBtn = document.createElement('button');
       deployProdEnvBtn.className = 'danger';
@@ -579,8 +550,8 @@ export function getWebviewHtml(webview: vscode.Webview): string {
           });
           groupEl.appendChild(groupError);
         }
-          appendSquashButton(groupEl, group.repoRoot);
-          configListEl.appendChild(groupEl);
+        appendProdButton(groupEl, group.repoRoot);
+        configListEl.appendChild(groupEl);
         return;
       }
       if (groups.length > 1) {
@@ -614,7 +585,7 @@ export function getWebviewHtml(webview: vscode.Webview): string {
             });
             groupEl.appendChild(groupError);
           }
-          appendSquashButton(groupEl, group.repoRoot);
+          appendProdButton(groupEl, group.repoRoot);
           configListEl.appendChild(groupEl);
         }
         return;

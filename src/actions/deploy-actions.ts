@@ -23,7 +23,6 @@ import { resolveDemandBranchSettings } from "../demand-settings";
 import { getLatestReleaseBranch } from "../release-branch";
 import { extractReleaseDate, formatDateStamp, toBranchSlug } from "../extension-utils";
 import { getConfigPathInfo, readMergeConfig } from "../config";
-import { handleRebaseSquash } from "./rebase-actions";
 import type { ActionDeps } from "./action-types";
 
 type ProdPrefixItem = {
@@ -552,9 +551,10 @@ export async function handleDeployProd(
         return;
       }
 
-      await runGit(["branch", targetBranch, pick.branch], cwd);
+      await runGit(["branch", "--no-track", targetBranch, pick.branch], cwd);
       localBranches.push(targetBranch);
 
+      let didPushTarget = false;
       for (let i = 0; i < sourceBranches.length; i += 1) {
         const sourceBranch = sourceBranches[i];
         const isLastSource = i === sourceBranches.length - 1;
@@ -583,6 +583,21 @@ export async function handleDeployProd(
         }
 
         deps.postMessage({ type: "result", result });
+        if (result.status === "success" && result.pushStatus === "ok") {
+          didPushTarget = true;
+        }
+      }
+
+      if (pushRemote && didPushTarget) {
+        await runGit(
+          [
+            "branch",
+            "--set-upstream-to",
+            `${pushRemote}/${targetBranch}`,
+            targetBranch,
+          ],
+          cwd
+        );
       }
 
       notifyInfo(t("deployProdSuccess", { branch: targetBranch }));
@@ -769,15 +784,4 @@ export async function handleDeployProdEnv(
   } finally {
     await deps.postState({ loadConfig: false });
   }
-}
-
-export async function handleSquashDeployProd(
-  deps: ActionDeps,
-  repoRoot?: string
-): Promise<void> {
-  const didSquash = await handleRebaseSquash(deps, repoRoot);
-  if (!didSquash) {
-    return;
-  }
-  await handleDeployProd(deps, repoRoot);
 }

@@ -3,7 +3,6 @@ export interface WebviewMessageHandlerDeps {
   handleDeployTest: (message: any) => Promise<void>;
   handleMergeToTest: (message: any) => Promise<void>;
   handleDeployProd: (repoRoot?: string) => Promise<void>;
-  handleSquashDeployProd: (repoRoot?: string) => Promise<void>;
   confirmDeployTest: (message: any) => Promise<void>;
   confirmDeployProdEnv: (repoRoot?: string) => Promise<void>;
   commitDemandCode: (repoRoot?: string) => Promise<void>;
@@ -12,7 +11,6 @@ export interface WebviewMessageHandlerDeps {
   openMergeEditor: () => Promise<void>;
   openConfig: (repoRoot?: string) => Promise<void>;
   confirmCommitAndDeploy: (repoRoot?: string) => Promise<void>;
-  handleRebaseSquashWithPrompt: (repoRoot?: string) => Promise<void>;
   createDemandBranch: (repoRoot?: string) => Promise<void>;
 }
 
@@ -39,10 +37,6 @@ export async function handleWebviewMessage(
   }
   if (type === "deployProd") {
     await deps.handleDeployProd(extractRepoRoot(message));
-    return;
-  }
-  if (type === "squashDeployProd") {
-    await deps.handleSquashDeployProd(extractRepoRoot(message));
     return;
   }
   if (type === "confirmDeployTest") {
@@ -75,10 +69,6 @@ export async function handleWebviewMessage(
   }
   if (type === "confirmCommitAndDeploy") {
     await deps.confirmCommitAndDeploy(extractRepoRoot(message));
-    return;
-  }
-  if (type === "rebaseSquash") {
-    await deps.handleRebaseSquashWithPrompt(extractRepoRoot(message));
     return;
   }
   if (type === "createDemandBranch") {
